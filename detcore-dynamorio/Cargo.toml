@@ -1,0 +1,23 @@
+[package]
+name = "detcore-dynamorio"
+description = "DynamoRIO backend glue for Detcore, the Hermit deterministic execution engine."
+version = "0.5.4"
+edition = "2024"
+license = "BSD-3-Clause"
+repository = "https://github.com/rrnewton/hermit-dynamorio"
+publish = false
+
+# libdetcore_dynamorio.so is built by detcore-dynamorio-cdylib, so this crate stays an rlib
+# and its dependents can start from its metadata.
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+detcore = { workspace = true }
+hermit-resources = { workspace = true }
+libc = "0.2.186"
+rand = "0.10.2"
+reverie = { workspace = true }
+reverie-dynamorio = { workspace = true }
+serde_json = { version = "1.0.140", features = ["alloc", "float_roundtrip", "raw_value", "unbounded_depth"] }
+tracing = "0.1.41"

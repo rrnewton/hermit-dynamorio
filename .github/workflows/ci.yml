@@ -1,0 +1,105 @@
+name: Rust
+
+# Preserve the source repository's owner policy: bot PRs do not automatically
+# consume hosted capacity, and other PRs run once they leave draft.
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -C link-arg=-llzma
+
+jobs:
+  regular:
+    name: Build and source controls
+    if: github.event_name != 'pull_request' || (github.event.pull_request.user.login != 'hermit-bot3' && !github.event.pull_request.draft)
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    - name: Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libunwind-dev liblzma-dev cmake zlib1g-dev
+    - name: Rust toolchain
+      uses: dtolnay/rust-toolchain@nightly-2026-07-12
+      with:
+        components: clippy, rustfmt
+    # The producer independently verifies the exact recursive Git source and
+    # recipe, including the Git executable and generated version inputs. An
+    # Actions cache hit never substitutes for those admission checks.
+    - name: Cache DynamoRIO build
+      uses: actions/cache@v4
+      with:
+        path: target/*/reverie-dynamorio-native-cache/dynamorio-install-*
+        key: dynamorio-${{ runner.os }}-${{ hashFiles('third-party/dynamorio/**', 'reverie-dynamorio/build.rs', 'reverie-dynamorio/source_checkout.rs') }}
+    - name: Build full Detcore packages
+      run: cargo build -p hermit-dynamorio -p detcore-dynamorio -p detcore-dynamorio-cdylib
+    - name: DynamoRIO virtual identity and pidfd_open policy
+      run: reverie-dynamorio/scripts/test-identity-policy.sh
+    - name: DynamoRIO native client
+      run: reverie-dynamorio/scripts/build-client.sh
+    - name: Strace caller artifact and standalone gates
+      env:
+        CARGO_BUILD_JOBS: "8"
+        CARGO_INCREMENTAL: "0"
+      run: >-
+        reverie-dynamorio/scripts/build-client.sh
+        --caller-manifest reverie-dynamorio-examples/strace-dynamorio-runtime/Cargo.toml
+        --profile debug --jobs 8 --check
+    - name: Caller lifecycle artifact and standalone gates
+      env:
+        CARGO_BUILD_JOBS: "8"
+        CARGO_INCREMENTAL: "0"
+      run: >-
+        reverie-dynamorio/scripts/build-client.sh
+        --caller-manifest reverie-dynamorio/tests/fixtures/caller-lifecycle-runtime/Cargo.toml
+        --profile debug --jobs 8 --check
+    - name: Counter1 caller artifact and standalone gates
+      env:
+        CARGO_BUILD_JOBS: "8"
+        CARGO_INCREMENTAL: "0"
+      run: >-
+        reverie-dynamorio/scripts/build-client.sh
+        --caller-manifest reverie-dynamorio-examples/counter1-dynamorio-runtime/Cargo.toml
+        --profile debug --jobs 8 --check
+    - name: Publish actual core allocator guest
+      env:
+        CARGO_BUILD_JOBS: "8"
+        CARGO_INCREMENTAL: "0"
+      run: >-
+        python3 reverie-dynamorio/scripts/build-core-env-guest.py
+        --target-dir "$GITHUB_WORKSPACE/target"
+        --destination "$GITHUB_WORKSPACE/target/core-env-guest-publication"
+        --github-env "$GITHUB_ENV"
+    - name: Counter1 allocator and explicit caller controls
+      env:
+        CARGO_BUILD_JOBS: "8"
+        CARGO_INCREMENTAL: "0"
+      run: cargo test --locked -p reverie-dynamorio-examples --test allocator -- --test-threads=1
+    - name: Generic Reverie backend tests
+      run: cargo test -p reverie-dynamorio --all-targets --all-features
+    - name: Backend-owned physical helper controls
+      run: cargo test -p hermit-dynamorio --lib
+    - name: Compile maintained full Detcore qualification cases
+      run: cargo test -p hermit-dynamorio --test qualification --no-run
+    - name: Full Detcore Clippy
+      run: cargo clippy -p hermit-dynamorio -p detcore-dynamorio -p detcore-dynamorio-cdylib --all-targets -- -D warnings
+    - name: Generic Reverie prototype Clippy
+      run: cargo clippy -p reverie-dynamorio --all-targets --all-features -- -D warnings
+    - name: Format
+      run: cargo fmt --all -- --check
+
+# This workflow does not execute Hermit qualification guests. The three full
+# Detcore cases require the maintained bounded harness route and a real
+# compatibility stamp; compilation is not a runtime qualification result.
