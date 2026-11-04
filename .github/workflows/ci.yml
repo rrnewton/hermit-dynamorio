@@ -49,9 +49,9 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y libunwind-dev liblzma-dev cmake zlib1g-dev
     - name: Rust toolchain
-      uses: dtolnay/rust-toolchain@nightly-2026-07-12
-      with:
-        components: clippy, rustfmt
+      run: |
+        rustup toolchain install nightly-2026-07-12 --component clippy,rustfmt
+        rustup default nightly-2026-07-12
     # The producer independently verifies the exact recursive Git source and
     # recipe, including the Git executable and generated version inputs. An
     # Actions cache hit never substitutes for those admission checks.
