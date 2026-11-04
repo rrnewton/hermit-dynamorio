@@ -112,7 +112,12 @@ jobs:
         CARGO_INCREMENTAL: "0"
       run: cargo test --locked -p reverie-dynamorio-examples --test allocator -- --test-threads=1
     - name: Generic Reverie backend tests
-      run: cargo test -p reverie-dynamorio --all-targets --all-features
+      # noexec_aux_segment_failure_is_terminal needs unshare
+      # --map-root-user, refused to non-root on hosted runners; it
+      # runs as root in the next step instead of being skipped.
+      run: cargo test -p reverie-dynamorio --all-targets --all-features -- --skip noexec_aux_segment_failure_is_terminal
+    - name: Namespace-dependent loader test (root)
+      run: sudo env "PATH=$PATH" "CARGO_HOME=$CARGO_HOME" "RUSTUP_HOME=$RUSTUP_HOME" cargo +nightly-2026-07-12 test -p reverie-dynamorio --test private_loader_search -- --exact noexec_aux_segment_failure_is_terminal
     - name: Backend-owned physical helper controls
       run: cargo test -p hermit-dynamorio --lib
     - name: Compile maintained full Detcore qualification cases
