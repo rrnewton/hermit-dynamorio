@@ -71,14 +71,14 @@ fn build_script_never_populates_source_over_the_network() {
         "Self::Tree => &[\"rev-parse\", \"--verify\", \"HEAD^{tree}\"]",
         "Self::Entries => &[\"ls-tree\", \"-rz\", \"--full-tree\", \"HEAD\"]",
         "Self::Index => &[\"ls-files\", \"--stage\", \"-z\"]",
-        "Self::Dirty => &[\"diff\", \"--no-ext-diff\", \"--quiet\", \"--ignore-submodules=none\", \"HEAD\", \"--\"]",
+        "Self::Dirty => &[\n                \"diff\",\n                \"--no-ext-diff\",\n                \"--quiet\",\n                \"--ignore-submodules=none\",\n                \"HEAD\",\n                \"--\",\n            ]",
         "Self::Blobs => &[\"cat-file\", \"--batch\"]",
-        "Self::Commit => &[\"cat-file\", \"commit\", PINS[0].commit]",
+        "Self::Commit => PINNED_COMMIT_ARGS",
         "Self::Timestamp => &[\"log\", \"-n\", \"1\", \"--format=%ct\"]",
         "Command::new(&self.executable)",
-        "for key in &self.inherited_git_variables { command.env_remove(key); }",
+        "for key in &self.inherited_git_variables {\n            command.env_remove(key);",
         "command.envs(GIT_ENVIRONMENT.iter().copied())",
-        "\"--no-replace-objects\", \"--no-lazy-fetch\", \"--no-optional-locks\"",
+        "\"--no-replace-objects\",\n                \"--no-lazy-fetch\",\n                \"--no-optional-locks\",",
         "(\"GIT_NO_LAZY_FETCH\", \"1\")",
         "-DGIT:FILEPATH=",
     ] {
@@ -210,9 +210,14 @@ fn recursive_dynamorio_binary_files_match_the_pinned_source_inventory() {
     let root = recursive_source();
     let expected = expected_class("binary");
     assert_eq!(expected.lines().count(), 503);
+    // The fixture is string-sorted; PathBuf order differs at
+    // `libelftc` vs `libelftc-aarch64` ('-' < '/'), so compare as sets
+    // of exact inventory lines (paths, modes, sizes, hashes).
     assert_eq!(
-        actual_class(&root, "binary", |bytes| bytes.contains(&0)),
-        expected
+        actual_class(&root, "binary", |bytes| bytes.contains(&0))
+            .lines()
+            .collect::<std::collections::BTreeSet<_>>(),
+        expected.lines().collect::<std::collections::BTreeSet<_>>()
     );
 }
 
