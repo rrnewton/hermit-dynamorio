@@ -764,7 +764,7 @@ dependencies = [
 [[package]]
 name = "reverie-core"
 version = "0.5.4"
-source = "git+https://github.com/rrnewton/reverie.git?rev=b5819d62a440bdb336d1db042972711881c0f944#b5819d62a440bdb336d1db042972711881c0f944"
+source = "git+https://github.com/rrnewton/reverie.git?rev=42b59ad872680b7e7815fc7a88ed76ca3a233832#42b59ad872680b7e7815fc7a88ed76ca3a233832"
 dependencies = [
  "addr2line",
  "anyhow",
@@ -819,7 +819,7 @@ dependencies = [
 [[package]]
 name = "reverie-memory"
 version = "0.5.4"
-source = "git+https://github.com/rrnewton/reverie.git?rev=b5819d62a440bdb336d1db042972711881c0f944#b5819d62a440bdb336d1db042972711881c0f944"
+source = "git+https://github.com/rrnewton/reverie.git?rev=42b59ad872680b7e7815fc7a88ed76ca3a233832#42b59ad872680b7e7815fc7a88ed76ca3a233832"
 dependencies = [
  "syscalls",
 ]
@@ -827,7 +827,7 @@ dependencies = [
 [[package]]
 name = "reverie-process"
 version = "0.5.4"
-source = "git+https://github.com/rrnewton/reverie.git?rev=b5819d62a440bdb336d1db042972711881c0f944#b5819d62a440bdb336d1db042972711881c0f944"
+source = "git+https://github.com/rrnewton/reverie.git?rev=42b59ad872680b7e7815fc7a88ed76ca3a233832#42b59ad872680b7e7815fc7a88ed76ca3a233832"
 dependencies = [
  "bincode",
  "bitflags 2.13.2",
@@ -844,7 +844,7 @@ dependencies = [
 [[package]]
 name = "reverie-rpc-transport"
 version = "0.5.4"
-source = "git+https://github.com/rrnewton/reverie.git?rev=b5819d62a440bdb336d1db042972711881c0f944#b5819d62a440bdb336d1db042972711881c0f944"
+source = "git+https://github.com/rrnewton/reverie.git?rev=42b59ad872680b7e7815fc7a88ed76ca3a233832#42b59ad872680b7e7815fc7a88ed76ca3a233832"
 dependencies = [
  "async-trait",
  "bincode",
@@ -859,7 +859,7 @@ dependencies = [
 [[package]]
 name = "reverie-syscalls"
 version = "0.5.4"
-source = "git+https://github.com/rrnewton/reverie.git?rev=b5819d62a440bdb336d1db042972711881c0f944#b5819d62a440bdb336d1db042972711881c0f944"
+source = "git+https://github.com/rrnewton/reverie.git?rev=42b59ad872680b7e7815fc7a88ed76ca3a233832#42b59ad872680b7e7815fc7a88ed76ca3a233832"
 dependencies = [
  "bitflags 2.13.2",
  "derive_more",

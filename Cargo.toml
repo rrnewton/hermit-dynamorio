@@ -13,17 +13,17 @@ repository = "https://github.com/rrnewton/hermit-dynamorio"
 
 # One exact generic core identity. No third-party backend feature is enabled.
 [workspace.dependencies]
-hermit = { package = "hermit-run", version = "0.5.4", git = "https://github.com/rrnewton/hermit", rev = "2bdd4aefcac0199d802786e1434a61c06947e2bd" }
-detcore = { package = "hermit-detcore", version = "0.5.4", git = "https://github.com/rrnewton/hermit", rev = "2bdd4aefcac0199d802786e1434a61c06947e2bd" }
-detcore-model = { version = "0.5.4", git = "https://github.com/rrnewton/hermit", rev = "2bdd4aefcac0199d802786e1434a61c06947e2bd" }
-hermit-resources = { version = "0.5.4", git = "https://github.com/rrnewton/hermit", rev = "2bdd4aefcac0199d802786e1434a61c06947e2bd" }
-hermit-test-workdir = { version = "0.5.4", git = "https://github.com/rrnewton/hermit", rev = "2bdd4aefcac0199d802786e1434a61c06947e2bd" }
-reverie = { package = "reverie-core", version = "0.5.4", git = "https://github.com/rrnewton/reverie.git", rev = "b5819d62a440bdb336d1db042972711881c0f944" }
-reverie-memory = { version = "0.5.4", git = "https://github.com/rrnewton/reverie.git", rev = "b5819d62a440bdb336d1db042972711881c0f944" }
-reverie-rpc-transport = { version = "0.5.4", git = "https://github.com/rrnewton/reverie.git", rev = "b5819d62a440bdb336d1db042972711881c0f944" }
-reverie-util = { version = "0.5.4", git = "https://github.com/rrnewton/reverie.git", rev = "b5819d62a440bdb336d1db042972711881c0f944" }
-reverie-examples = { version = "0.5.4", git = "https://github.com/rrnewton/reverie.git", rev = "b5819d62a440bdb336d1db042972711881c0f944", default-features = false }
-reverie-liteinst = { version = "0.5.4", git = "https://github.com/rrnewton/reverie.git", rev = "b5819d62a440bdb336d1db042972711881c0f944", default-features = false }
+hermit = { package = "hermit-run", version = "0.5.4", git = "https://github.com/rrnewton/hermit", rev = "890f7e672ecd351644f53ab07fc78ad88a76af61" }
+detcore = { package = "hermit-detcore", version = "0.5.4", git = "https://github.com/rrnewton/hermit", rev = "890f7e672ecd351644f53ab07fc78ad88a76af61" }
+detcore-model = { version = "0.5.4", git = "https://github.com/rrnewton/hermit", rev = "890f7e672ecd351644f53ab07fc78ad88a76af61" }
+hermit-resources = { version = "0.5.4", git = "https://github.com/rrnewton/hermit", rev = "890f7e672ecd351644f53ab07fc78ad88a76af61" }
+hermit-test-workdir = { version = "0.5.4", git = "https://github.com/rrnewton/hermit", rev = "890f7e672ecd351644f53ab07fc78ad88a76af61" }
+reverie = { package = "reverie-core", version = "0.5.4", git = "https://github.com/rrnewton/reverie.git", rev = "42b59ad872680b7e7815fc7a88ed76ca3a233832" }
+reverie-memory = { version = "0.5.4", git = "https://github.com/rrnewton/reverie.git", rev = "42b59ad872680b7e7815fc7a88ed76ca3a233832" }
+reverie-rpc-transport = { version = "0.5.4", git = "https://github.com/rrnewton/reverie.git", rev = "42b59ad872680b7e7815fc7a88ed76ca3a233832" }
+reverie-util = { version = "0.5.4", git = "https://github.com/rrnewton/reverie.git", rev = "42b59ad872680b7e7815fc7a88ed76ca3a233832" }
+reverie-examples = { version = "0.5.4", git = "https://github.com/rrnewton/reverie.git", rev = "42b59ad872680b7e7815fc7a88ed76ca3a233832", default-features = false }
+reverie-liteinst = { version = "0.5.4", git = "https://github.com/rrnewton/reverie.git", rev = "42b59ad872680b7e7815fc7a88ed76ca3a233832", default-features = false }
 reverie-dynamorio = { version = "0.5.4", path = "reverie-dynamorio", default-features = false }
 detcore-dynamorio = { version = "0.5.4", path = "detcore-dynamorio" }
 

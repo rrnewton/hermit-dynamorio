@@ -19,9 +19,26 @@ env:
   RUSTFLAGS: -C link-arg=-llzma
 
 jobs:
+  hosted-probe:
+    name: Hosted ptrace probe
+    runs-on: ubuntu-latest
+    steps:
+    - name: ptrace probe
+      run: |
+        python3 - <<'PY'
+        import ctypes, os, sys
+        libc = ctypes.CDLL(None, use_errno=True)
+        pid = os.fork()
+        if pid == 0:
+            os._exit(0 if libc.ptrace(0, 0, 0, 0) == 0 else 42)
+        _, st, _ = os.wait4(pid, 0)
+        print("yama:", open("/proc/sys/kernel/yama/ptrace_scope").read().strip()
+              if os.path.exists("/proc/sys/kernel/yama/ptrace_scope") else "(none)")
+        sys.exit(1 if os.WEXITSTATUS(st) == 42 else 0)
+        PY
   regular:
     name: Build and source controls
-    if: github.event_name != 'pull_request' || (github.event.pull_request.user.login != 'hermit-bot3' && !github.event.pull_request.draft)
+    needs: hosted-probe
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
