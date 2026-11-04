@@ -1097,6 +1097,7 @@ impl DynamoRioInvocation {
                 detcore_model::summary::PreemptionSummary {
                     max_timeslice_ns: self.config.max_timeslice.map(|maximum| maximum.get()),
                     timer_enabled: Some(false),
+                    stopless_slice_ends: None,
                 }
             );
         }
@@ -1197,6 +1198,7 @@ impl DynamoRioVerification {
         Ok(PhysicalRun {
             output: dynamorio_verification_output(output),
             skid_overshoots: 0,
+            terminal_outcome: None,
             latches: dynamorio_run_latches(&evidence),
             pending: Pending(DynamoRioRunCompletion {
                 stats,
