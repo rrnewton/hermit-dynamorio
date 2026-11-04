@@ -60,6 +60,8 @@ jobs:
       with:
         path: target/*/reverie-dynamorio-native-cache/dynamorio-install-*
         key: dynamorio-${{ runner.os }}-${{ hashFiles('third-party/dynamorio/**', 'reverie-dynamorio/build.rs', 'reverie-dynamorio/source_checkout.rs') }}
+    - name: Install rust-script (build-client.sh helper)
+      run: cargo install rust-script --locked
     - name: Build full Detcore packages
       run: cargo build -p hermit-dynamorio -p detcore-dynamorio -p detcore-dynamorio-cdylib
     - name: DynamoRIO virtual identity and pidfd_open policy
