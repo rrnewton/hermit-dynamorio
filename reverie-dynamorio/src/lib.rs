@@ -2254,7 +2254,9 @@ pub fn run_caller_syscall_with_guest<T: Tool>(
                 );
             }
             reverie::CallbackDecision::Refused(reason) => return Err(caller_error(reason)),
-            reverie::CallbackDecision::ForkChild { .. } | reverie::CallbackDecision::Wait => {
+            reverie::CallbackDecision::StartupCompleted(_)
+            | reverie::CallbackDecision::ForkChild { .. }
+            | reverie::CallbackDecision::Wait => {
                 return Err(caller_error(
                     "caller driver received an impossible transition",
                 ));
