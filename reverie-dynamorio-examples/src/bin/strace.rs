@@ -49,7 +49,7 @@ fn main() -> anyhow::Result<()> {
         &options.common,
         config,
         &caller,
-    ))?;
+    )).map_err(|error| anyhow::anyhow!("{error}"))?;
     if let Some((stdout, stderr)) = &run.captured {
         use std::io::Write as _;
         std::io::stdout().write_all(stdout)?;
