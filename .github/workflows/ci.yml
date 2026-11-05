@@ -120,8 +120,20 @@ jobs:
     # built drrun executable inside its unshare mount namespace; the
     # hosted sandbox denies that exec even as root. It stays in the
     # local/privileged scope (see the validate-local route).
+    # Residual: the four library dispatch tests need an installed core
+    # engine cohort (HERMIT_DYNAMORIO_ENGINE_ARTIFACT naming an installed
+    # engine-artifact.json, produced by core's inguest-engine producer).
+    # That is an explicit input of the retained/privileged lane
+    # (ci/generate-retained-ci.py), not something this hosted workflow
+    # builds; they run there and via ci/validate-local.sh when the
+    # variable is set.
     - name: Backend-owned physical helper controls
-      run: cargo test -p hermit-dynamorio --lib
+      run: >-
+        cargo test -p hermit-dynamorio --lib --
+        --skip dynamorio_library_environment_privacy_is_caller_selected
+        --skip dynamorio_private_placement_preserves_library_dispatch
+        --skip dynamorio_public_dispatch_runs_echo_through_detcore
+        --skip dynamorio_public_status_dispatch_runs_true_through_detcore
     - name: Compile maintained full Detcore qualification cases
       run: cargo test -p hermit-dynamorio --test qualification --no-run
     - name: Full Detcore Clippy

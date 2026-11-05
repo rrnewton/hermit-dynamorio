@@ -23,7 +23,21 @@ if [[ -n "${DEV_HERMIT:-}" ]]; then
     export HERMIT_WRAPPER="$DEV_HERMIT/bin/safehermit"
 fi
 
-cargo test --workspace --locked
+# The four library dispatch tests need an installed core engine cohort
+# (HERMIT_DYNAMORIO_ENGINE_ARTIFACT). Without it they are the documented
+# hosted residual; with it, the full workspace suite runs.
+SKIP_ENGINE_TESTS=()
+if [[ -z "${HERMIT_DYNAMORIO_ENGINE_ARTIFACT:-}" ]]; then
+    SKIP_ENGINE_TESTS=(
+        --skip dynamorio_library_environment_privacy_is_caller_selected
+        --skip dynamorio_private_placement_preserves_library_dispatch
+        --skip dynamorio_public_dispatch_runs_echo_through_detcore
+        --skip dynamorio_public_status_dispatch_runs_true_through_detcore
+    )
+fi
+cargo test -p hermit-dynamorio --lib --locked -- "${SKIP_ENGINE_TESTS[@]}"
+cargo test -p hermit-dynamorio --test qualification --no-run --locked
+cargo test --workspace --locked --exclude hermit-dynamorio
 cargo fmt --all -- --check
 cargo clippy --workspace --locked -- -D warnings
 CORE_SRC="$CORE_SRC" EXECUTION_OWNER=dynamorio bash ci/run-owned-nextest.sh
