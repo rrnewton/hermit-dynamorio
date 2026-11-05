@@ -134,7 +134,19 @@ jobs:
         --skip dynamorio_private_placement_preserves_library_dispatch
         --skip dynamorio_public_dispatch_runs_echo_through_detcore
         --skip dynamorio_public_status_dispatch_runs_true_through_detcore
+    # The qualification link is the largest in the job (three large
+    # binaries in the test profile). On the hosted runner the linker
+    # died with a bus error under disk/parallel-link pressure
+    # (run 41966771170), so free incremental artifacts and limit
+    # parallel links for this step.
+    - name: Free disk for qualification link
+      run: |
+        df -h
+        rm -rf target/debug/incremental
+        du -sh target || true
     - name: Compile maintained full Detcore qualification cases
+      env:
+        CARGO_BUILD_JOBS: "2"
       run: cargo test -p hermit-dynamorio --test qualification --no-run
     - name: Full Detcore Clippy
       run: cargo clippy -p hermit-dynamorio -p detcore-dynamorio -p detcore-dynamorio-cdylib --all-targets -- -D warnings
