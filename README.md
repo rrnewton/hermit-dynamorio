@@ -21,6 +21,14 @@ The staged core inputs are Hermit
 [`1a52541080c50457cbd3b691709885827908d5a6`](https://github.com/rrnewton/hermit/commit/1a52541080c50457cbd3b691709885827908d5a6)
 and Reverie
 [`05e82111a13bc066654e8dff33a0802ac1ba8a17`](https://github.com/rrnewton/reverie/commit/05e82111a13bc066654e8dff33a0802ac1ba8a17).
+Those two commits (and the support copies from Reverie
+`882c91c02b981f56370a2912f0832b04fefc46ec`) are moved-from provenance: they
+record where this code came from. They are not the build pins. This tree
+builds against Hermit
+[`890f7e672ecd351644f53ab07fc78ad88a76af61`](https://github.com/rrnewton/hermit/commit/890f7e672ecd351644f53ab07fc78ad88a76af61)
+and Reverie
+[`42b59ad872680b7e7815fc7a88ed76ca3a233832`](https://github.com/rrnewton/reverie/commit/42b59ad872680b7e7815fc7a88ed76ca3a233832),
+the exact revisions named in the workspace `Cargo.toml`.
 Dependencies go from this extension to those exact core inputs; no core
 third-party backend feature is enabled. Package versions are preserved move
 inputs, not a new version-bump attestation.
@@ -49,10 +57,12 @@ ratchet remain in force. See [the producer documentation](reverie-dynamorio/READ
 
 ## Build and qualification status
 
-The source is staged for review. Cargo resolution/lock generation, compilation,
-the complete-fork SDK build and all renamed runtime cases have not been run.
-The earlier prototype's three full Detcore cases passed with older core and
-SDK inputs; those results do not qualify this moved tree.
+Cargo resolution/lock generation, compilation, the complete-fork SDK build
+and the hosted unit, clippy and fmt gates have been run: the hosted validate
+workflow is green at the reviewed head (run 41968615824). The renamed
+runtime guest cases have not been run. The earlier prototype's three full
+Detcore cases passed with older core and SDK inputs; those results do not
+qualify this moved tree.
 
 The executable must be produced with the core's maintained
 `ci/build-compatible-cli.rs` path, which measures both actual libtest
