@@ -6,6 +6,10 @@ publish.workspace = true
 repository.workspace = true
 license = "BSD-3-Clause"
 description = "DynamoRIO physical adapter for the shared Hermit application"
+# Test targets are declared explicitly below: tests/inherited_terminal_read.rs
+# and tests/native_parity/ are modules of the qualification target, not
+# standalone test crates.
+autotests = false
 
 [lib]
 name = "hermit_dynamorio"
@@ -18,6 +22,26 @@ path = "src/main.rs"
 [[bin]]
 name = "check-current-engine-client"
 path = "src/bin/check_current_engine_client.rs"
+
+[[test]]
+name = "ci_manifest_ordering"
+path = "tests/ci_manifest_ordering.rs"
+
+[[test]]
+name = "dbt_copied_tty"
+path = "tests/dbt_copied_tty.rs"
+
+[[test]]
+name = "first_instruction"
+path = "tests/first_instruction.rs"
+
+[[test]]
+name = "qualification"
+path = "tests/qualification.rs"
+
+[[test]]
+name = "retained_core_ci"
+path = "tests/retained_core_ci.rs"
 
 [dependencies]
 hermit = { workspace = true }

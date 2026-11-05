@@ -414,7 +414,7 @@ impl Blobs {
         self.output.read_exact(&mut expected)?;
         let mut newline = [0];
         self.output.read_exact(&mut newline)?;
-        if expected != actual || newline != [b'\n'] {
+        if expected != actual || newline != *b"\n" {
             return Err(invalid(
                 "physical source bytes differ from the pinned Git blob",
             ));

@@ -341,8 +341,7 @@ fn missing_dynamorio_completion_stats_are_typed_backend_failures_for_each_run() 
                     run,
                 },
             )
-            .err()
-            .expect("missing stats must refuse");
+            .expect_err("missing stats must refuse");
         assert!(error.downcast_ref::<hermit::BackendRunFailure>().is_some());
         assert!(format!("{error:#}").contains("typed whole-process statistics were missing"));
     }
@@ -403,8 +402,7 @@ fn missing_dynamorio_completion_stats_are_typed_backend_failures_for_each_run() 
                 run: VerificationRun::Run2,
             },
         )
-        .err()
-        .expect("missing second-run stats must refuse");
+        .expect_err("missing second-run stats must refuse");
     assert!(error.downcast_ref::<hermit::BackendRunFailure>().is_some());
     assert!(format!("{error:#}").contains("typed whole-process statistics were missing"));
 }

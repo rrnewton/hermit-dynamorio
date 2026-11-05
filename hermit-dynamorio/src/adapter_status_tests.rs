@@ -1,5 +1,4 @@
 use super::*;
-use std::os::unix::process::ExitStatusExt as _;
 
 #[test]
 fn a_signalled_guest_is_not_reported_as_a_normal_exit() {

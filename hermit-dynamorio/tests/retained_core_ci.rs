@@ -10,9 +10,11 @@
 //! through its actual adapter. There is no unavailable-success branch.
 
 #[path = "support/hermit_binary.rs"]
+#[allow(dead_code)]
 mod hermit_test;
 #[path = "support/retained_run2_log.rs"]
 mod run2_log;
+#[allow(dead_code)]
 mod support;
 
 use std::fs;

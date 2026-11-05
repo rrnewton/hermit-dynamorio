@@ -11,11 +11,13 @@
 //! This target has no unavailable-success branch. Missing artifacts fail it.
 
 #[path = "support/hermit_binary.rs"]
+#[allow(dead_code)]
 mod hermit_test;
 mod inherited_terminal_read;
 mod native_parity;
 #[path = "../src/placement_probe.rs"]
 mod placement_probe;
+#[allow(dead_code)]
 mod support;
 
 use std::fs;

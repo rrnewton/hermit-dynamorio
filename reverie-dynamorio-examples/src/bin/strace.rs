@@ -45,11 +45,13 @@ fn main() -> anyhow::Result<()> {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?;
-    let run = runtime.block_on(reverie_dynamorio_examples::backend::run_caller::<Strace>(
-        &options.common,
-        config,
-        &caller,
-    )).map_err(|error| anyhow::anyhow!("{error}"))?;
+    let run = runtime
+        .block_on(reverie_dynamorio_examples::backend::run_caller::<Strace>(
+            &options.common,
+            config,
+            &caller,
+        ))
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
     if let Some((stdout, stderr)) = &run.captured {
         use std::io::Write as _;
         std::io::stdout().write_all(stdout)?;

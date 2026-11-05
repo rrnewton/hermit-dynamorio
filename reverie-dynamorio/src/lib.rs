@@ -3372,6 +3372,12 @@ pub unsafe extern "C" fn reverie_dynamorio_runtime_totals(
     // DynamoRIO client's tiny stack, which overflows while formatting.
 }
 
+/// Whether this build contains the explicit test-only real-exec observer.
+/// It does not select another runner or change the physical client.
+pub fn launch_observation_supported() -> bool {
+    cfg!(feature = "launch-observation")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -5002,10 +5008,4 @@ mod tests {
         assert_eq!(align_up(9, 8), 16);
         assert_eq!(align_up(13, 1), 13);
     }
-}
-
-/// Whether this build contains the explicit test-only real-exec observer.
-/// It does not select another runner or change the physical client.
-pub fn launch_observation_supported() -> bool {
-    cfg!(feature = "launch-observation")
 }

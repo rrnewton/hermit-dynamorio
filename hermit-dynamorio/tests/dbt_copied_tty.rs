@@ -7,8 +7,10 @@
  */
 
 #[path = "support/hermit_binary.rs"]
+#[allow(dead_code)]
 mod hermit_test;
 
+#[allow(dead_code)]
 mod support;
 use std::fs;
 use std::path::Path;

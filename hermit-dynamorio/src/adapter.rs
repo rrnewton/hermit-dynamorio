@@ -61,8 +61,8 @@ pub struct Session(SessionState);
 
 enum SessionState {
     Ordinary {
-        invocation: Option<DynamoRioInvocation>,
-        tracing: CoordinatorTracing,
+        invocation: Option<Box<DynamoRioInvocation>>,
+        tracing: Box<CoordinatorTracing>,
         summary: bool,
         engagement: Option<PathBuf>,
         logging: Option<LevelFilter>,
@@ -134,8 +134,8 @@ impl BackendAdapter for DynamoRioAdapter {
             }));
         }
         Ok(Session(SessionState::Ordinary {
-            invocation: Some(invocation),
-            tracing: request.coordinator_tracing(),
+            invocation: Some(Box::new(invocation)),
+            tracing: Box::new(request.coordinator_tracing()),
             summary: request.summary_requested(),
             engagement: request.engagement_path().map(Path::to_owned),
             logging: request.logging(),
@@ -740,6 +740,25 @@ fn dynamorio_run_latches(evidence: &DynamoRioEvidence) -> RunLatches {
     }
 }
 
+/// Refuse to compare `run` when either latch is set.
+///
+/// Satellite-local equivalent of core's `RunLatches::refuse_comparison`,
+/// which is `pub(super)` inside the hermit binary crate at the pinned
+/// revision and therefore not callable from this crate. The error strings
+/// mirror core exactly: determinism loss first, then log-sink failure.
+#[cfg(test)]
+fn refuse_comparison(latches: &RunLatches, run: &str) -> Result<(), Error> {
+    if let Some(reason) = &latches.determinism_loss {
+        return Err(Error::msg(format!(
+            "{run}: determinism loss recorded: {reason}"
+        )));
+    }
+    if let Some(error) = &latches.log_sink_failure {
+        return Err(Error::msg(format!("{run}: log sink failure: {error}")));
+    }
+    Ok(())
+}
+
 /// Write the comparison log for one DYNAMORIO run from its decoded evidence.
 ///
 /// The log holds `DynamoRioEvidence::all_records()`: every authenticated record in
@@ -1109,7 +1128,7 @@ impl DynamoRioInvocation {
             .as_ref()
             .is_some_and(|input| unsafe { libc::isatty(input.as_raw_fd()) } == 1);
         Ok(DynamoRioVerification {
-            invocation: self,
+            invocation: Box::new(self),
             stdin,
             terminal,
             replay: tempfile::tempfile()?,
@@ -1119,7 +1138,7 @@ impl DynamoRioInvocation {
 
 /// One pair's lazy stdin replay state; the common app owns run ordering.
 struct DynamoRioVerification {
-    invocation: DynamoRioInvocation,
+    invocation: Box<DynamoRioInvocation>,
     stdin: Option<std::fs::File>,
     terminal: bool,
     replay: std::fs::File,

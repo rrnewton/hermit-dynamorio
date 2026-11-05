@@ -245,11 +245,7 @@ fn a_dynamorio_run_whose_evidence_records_a_determinism_loss_is_not_compared() {
         b"1970-01-01T00:00:00.000000Z INFO detcore: [dtid 3] DETLOG [syscall] getpid() = 3\n";
     let clean = decoded_dynamorio_evidence(&[DYNAMORIO_INITIALIZATION_RECORD, record]);
     assert_eq!(dynamorio_run_latches(&clean).determinism_loss, None);
-    assert!(
-        dynamorio_run_latches(&clean)
-            .refuse_comparison("run 1")
-            .is_ok()
-    );
+    assert!(refuse_comparison(&dynamorio_run_latches(&clean), "run 1").is_ok());
 
     let loss = format!(
         "1970-01-01T00:00:00.000000Z ERROR {}: process 3 exited without deregistering\n",
@@ -257,13 +253,21 @@ fn a_dynamorio_run_whose_evidence_records_a_determinism_loss_is_not_compared() {
     );
     let lost =
         decoded_dynamorio_evidence(&[DYNAMORIO_INITIALIZATION_RECORD, record, loss.as_bytes()]);
-    let refusal = dynamorio_run_latches(&lost)
-        .refuse_comparison("run 2")
+    let refusal = refuse_comparison(&dynamorio_run_latches(&lost), "run 2")
         .unwrap_err()
         .to_string();
     assert_eq!(
         refusal,
         "run 2: determinism loss recorded: process 3 exited without deregistering"
+    );
+
+    let sink = RunLatches {
+        determinism_loss: None,
+        log_sink_failure: Some("sink broke".to_owned()),
+    };
+    assert_eq!(
+        refuse_comparison(&sink, "run 3").unwrap_err().to_string(),
+        "run 3: log sink failure: sink broke"
     );
 }
 

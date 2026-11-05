@@ -588,41 +588,6 @@ impl NativeArtifacts {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::os::unix::fs::symlink;
-
-    #[test]
-    fn held_header_refuses_changed_bytes_replaced_inode_and_symlink() {
-        let directory = tempfile::tempdir().unwrap();
-        let path = fs::canonicalize(directory.path())
-            .unwrap()
-            .join(NATIVE_HEADER);
-        fs::write(&path, b"actual header input").unwrap();
-        let original = HeldFile::open(&path, MAX_RECORD, None, false).unwrap();
-        assert_eq!(original.bytes(MAX_RECORD).unwrap(), b"actual header input");
-        fs::write(&path, b"changed header input").unwrap();
-        assert!(original.recheck().is_err());
-        fs::write(&path, b"actual header input").unwrap();
-        let original = HeldFile::open(&path, MAX_RECORD, None, false).unwrap();
-        let replacement = path.with_extension("replacement");
-        fs::write(&replacement, b"actual header input").unwrap();
-        fs::rename(&replacement, &path).unwrap();
-        assert!(original.recheck().is_err());
-        let link = path.with_extension("link");
-        symlink(&path, &link).unwrap();
-        assert!(HeldFile::open(&link, MAX_RECORD, None, false).is_err());
-    }
-
-    #[test]
-    fn real_nonengine_elf_does_not_satisfy_native_entry_contract() {
-        let path = fs::canonicalize(std::env::current_exe().unwrap()).unwrap();
-        let file = HeldFile::open(&path, MAX_FILE, None, true).unwrap();
-        assert!(require_native_exports(&file).is_err());
-    }
-}
-
 /// Check the already-produced current client against its exact held core engine.
 /// This follows the same strict source/schema/header/SDK/link custody as a real
 /// launch, but never invokes CMake or accepts a caller-supplied client/cache key.
@@ -657,4 +622,39 @@ pub fn check_current_engine_client() -> Result<Vec<String>> {
         Ok(imports.into_iter().collect())
     })();
     artifacts.complete(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::fs::symlink;
+
+    #[test]
+    fn held_header_refuses_changed_bytes_replaced_inode_and_symlink() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = fs::canonicalize(directory.path())
+            .unwrap()
+            .join(NATIVE_HEADER);
+        fs::write(&path, b"actual header input").unwrap();
+        let original = HeldFile::open(&path, MAX_RECORD, None, false).unwrap();
+        assert_eq!(original.bytes(MAX_RECORD).unwrap(), b"actual header input");
+        fs::write(&path, b"changed header input").unwrap();
+        assert!(original.recheck().is_err());
+        fs::write(&path, b"actual header input").unwrap();
+        let original = HeldFile::open(&path, MAX_RECORD, None, false).unwrap();
+        let replacement = path.with_extension("replacement");
+        fs::write(&replacement, b"actual header input").unwrap();
+        fs::rename(&replacement, &path).unwrap();
+        assert!(original.recheck().is_err());
+        let link = path.with_extension("link");
+        symlink(&path, &link).unwrap();
+        assert!(HeldFile::open(&link, MAX_RECORD, None, false).is_err());
+    }
+
+    #[test]
+    fn real_nonengine_elf_does_not_satisfy_native_entry_contract() {
+        let path = fs::canonicalize(std::env::current_exe().unwrap()).unwrap();
+        let file = HeldFile::open(&path, MAX_FILE, None, true).unwrap();
+        assert!(require_native_exports(&file).is_err());
+    }
 }
