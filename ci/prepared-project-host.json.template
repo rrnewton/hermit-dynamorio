@@ -1,0 +1,7 @@
+{
+  "schema": 1,
+  "repository": "<ACTUAL_CANONICAL_EXTENSION_ROOT>",
+  "graph": "<ACTUAL_CANONICAL_EXTENSION_ROOT>/ci/dag/validate.json",
+  "tools_root": "<ACTUAL_CANONICAL_CORE_ROOT>",
+  "shared_package": "hermit-run"
+}

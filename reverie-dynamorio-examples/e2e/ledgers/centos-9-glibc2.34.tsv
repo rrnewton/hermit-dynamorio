@@ -1,0 +1,3 @@
+# Historical R882 DynamoRIO backend row, renamed from dbt; not a new measurement.
+# The core owns the unchanged corpus and comparator.
+*	dynamorio	mismatch	rseq=ok -> rseq=ENOSYS	https://github.com/rrnewton/hermit/issues/4485

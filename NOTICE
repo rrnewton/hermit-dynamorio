@@ -1,0 +1,40 @@
+Hermit DynamoRIO extension
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+The moved Hermit adapter and Detcore integration retain the Hermit BSD-3-Clause
+license in LICENSE. The moved Reverie code and shared textual inputs retain
+their original BSD-2-Clause license in LICENSES/Reverie-LICENSE, also copied
+into reverie-dynamorio/LICENSE and support/LICENSE. Original source headers
+and notices are preserved.
+
+DynamoRIO upstream: https://github.com/DynamoRIO/dynamorio
+Patched fork: https://github.com/rrnewton/dynamorio
+Complete fork commit: d790195243d31ed9da6f5bc867fd4ea0de4f7518
+Complete fork tree: 4719aa0f2ae61abd481dc1799158bf6fdea06d65
+Source path: third-party/dynamorio
+
+The complete fork retains its License.txt, ACKNOWLEDGEMENTS, all upstream
+component notices, and these exact recursive repositories:
+
+  third_party/libipt
+    c848a85c3104e2f5780741f85de5c9e65476ece2
+    License: third-party/dynamorio/third_party/libipt/LICENSE
+  third_party/zlib
+    51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf
+    License: third-party/dynamorio/third_party/zlib/LICENSE
+  third_party/elfutils
+    302252356da5475670ac5b10dadd091c59689425
+    Notices: third-party/dynamorio/third_party/elfutils/COPYING,
+             COPYING-GPLV2 and COPYING-LGPLV3
+
+Other component texts include ext/drwrap/license.txt, ext/drutil/license.txt,
+the embedded third_party/valgrind header notices, third_party/lcov/COPYING and
+third_party/binutils/test_decenc/COPYING under that same complete source root.
+The build retains the maintained recipe and client extension requirements;
+listing a source component here is not a claim that it is linked into every
+artifact. Redistribution must retain the applicable complete texts and source
+obligations, including those for retained upstream test inputs and images.
+
+REVISION records the historical curated-source pin
+929840ad9190e5086775e8debc0f0b79b4208d59. It does not replace the complete fork
+and child identities above.

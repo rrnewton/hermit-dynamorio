@@ -1,0 +1,21 @@
+[package]
+name = "detcore-dynamorio-cdylib"
+description = "libdetcore_dynamorio.so, the Detcore runtime the DYNAMORIO client loads, built from detcore-dynamorio."
+version = "0.5.4"
+edition = "2024"
+license = "BSD-3-Clause"
+repository = "https://github.com/rrnewton/hermit-dynamorio"
+publish = false
+
+# Only the shared object. detcore-dynamorio itself stays an rlib so its dependents
+# start from its metadata instead of waiting for this link (see src/lib.rs).
+[lib]
+name = "detcore_dynamorio"
+crate-type = ["cdylib"]
+# The library it re-exports is documented and tested under its own name.
+doc = false
+test = false
+doctest = false
+
+[dependencies]
+detcore-dynamorio-rlib = { package = "detcore-dynamorio", version = "0.5.4", path = "../detcore-dynamorio" }

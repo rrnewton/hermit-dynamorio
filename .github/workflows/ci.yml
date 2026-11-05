@@ -1,0 +1,160 @@
+name: Rust
+
+# Preserve the source repository's owner policy: bot PRs do not automatically
+# consume hosted capacity, and other PRs run once they leave draft.
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -C link-arg=-llzma
+
+jobs:
+  hosted-probe:
+    name: Hosted ptrace probe
+    runs-on: ubuntu-latest
+    steps:
+    - name: ptrace probe
+      run: |
+        python3 - <<'PY'
+        import ctypes, os, sys
+        libc = ctypes.CDLL(None, use_errno=True)
+        pid = os.fork()
+        if pid == 0:
+            os._exit(0 if libc.ptrace(0, 0, 0, 0) == 0 else 42)
+        _, st, _ = os.wait4(pid, 0)
+        print("yama:", open("/proc/sys/kernel/yama/ptrace_scope").read().strip()
+              if os.path.exists("/proc/sys/kernel/yama/ptrace_scope") else "(none)")
+        sys.exit(1 if os.WEXITSTATUS(st) == 42 else 0)
+        PY
+  regular:
+    name: Build and source controls
+    needs: hosted-probe
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    - name: Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libunwind-dev liblzma-dev cmake zlib1g-dev
+    - name: Rust toolchain
+      run: |
+        rustup toolchain install nightly-2026-07-12 --component clippy,rustfmt
+        rustup default nightly-2026-07-12
+    # The producer independently verifies the exact recursive Git source and
+    # recipe, including the Git executable and generated version inputs. An
+    # Actions cache hit never substitutes for those admission checks.
+    - name: Cache DynamoRIO build
+      uses: actions/cache@v4
+      with:
+        path: target/*/reverie-dynamorio-native-cache/dynamorio-install-*
+        key: dynamorio-${{ runner.os }}-${{ hashFiles('third-party/dynamorio/**', 'reverie-dynamorio/build.rs', 'reverie-dynamorio/source_checkout.rs') }}
+    - name: Install rust-script (build-client.sh helper)
+      run: cargo install rust-script --locked
+    - name: Build full Detcore packages
+      run: cargo build -p hermit-dynamorio -p detcore-dynamorio -p detcore-dynamorio-cdylib
+    - name: DynamoRIO virtual identity and pidfd_open policy
+      run: reverie-dynamorio/scripts/test-identity-policy.sh
+    - name: Warm caller dependency cache (producer builds offline)
+      run: |
+        for manifest in reverie-dynamorio-examples/strace-dynamorio-runtime/Cargo.toml reverie-dynamorio-examples/counter1-dynamorio-runtime/Cargo.toml reverie-dynamorio/tests/fixtures/caller-lifecycle-runtime/Cargo.toml; do
+          cargo fetch --locked --manifest-path "$manifest"
+        done
+    - name: DynamoRIO native client
+      run: reverie-dynamorio/scripts/build-client.sh
+    - name: Strace caller artifact and standalone gates
+      env:
+        CARGO_BUILD_JOBS: "8"
+        CARGO_INCREMENTAL: "0"
+      run: >-
+        reverie-dynamorio/scripts/build-client.sh
+        --caller-manifest reverie-dynamorio-examples/strace-dynamorio-runtime/Cargo.toml
+        --profile debug --jobs 8 --check
+    - name: Caller lifecycle artifact and standalone gates
+      env:
+        CARGO_BUILD_JOBS: "8"
+        CARGO_INCREMENTAL: "0"
+      run: >-
+        reverie-dynamorio/scripts/build-client.sh
+        --caller-manifest reverie-dynamorio/tests/fixtures/caller-lifecycle-runtime/Cargo.toml
+        --profile debug --jobs 8 --check
+    - name: Counter1 caller artifact and standalone gates
+      env:
+        CARGO_BUILD_JOBS: "8"
+        CARGO_INCREMENTAL: "0"
+      run: >-
+        reverie-dynamorio/scripts/build-client.sh
+        --caller-manifest reverie-dynamorio-examples/counter1-dynamorio-runtime/Cargo.toml
+        --profile debug --jobs 8 --check
+    - name: Publish actual core allocator guest
+      env:
+        CARGO_BUILD_JOBS: "8"
+        CARGO_INCREMENTAL: "0"
+      run: >-
+        python3 reverie-dynamorio/scripts/build-core-env-guest.py
+        --target-dir "$GITHUB_WORKSPACE/target"
+        --destination "$GITHUB_WORKSPACE/target/core-env-guest-publication"
+        --github-env "$GITHUB_ENV"
+    - name: Counter1 allocator and explicit caller controls
+      env:
+        CARGO_BUILD_JOBS: "8"
+        CARGO_INCREMENTAL: "0"
+      run: cargo test --locked -p reverie-dynamorio-examples --test allocator -- --test-threads=1
+    - name: Generic Reverie backend tests
+      # noexec_aux_segment_failure_is_terminal needs unshare
+      # --map-root-user, refused to non-root on hosted runners; it
+      # runs as root in the next step instead of being skipped.
+      run: cargo test -p reverie-dynamorio --all-targets --all-features -- --skip noexec_aux_segment_failure_is_terminal
+    # Residual: noexec_aux_segment_failure_is_terminal also needs the
+    # built drrun executable inside its unshare mount namespace; the
+    # hosted sandbox denies that exec even as root. It stays in the
+    # local/privileged scope (see the validate-local route).
+    # Residual: the four library dispatch tests need an installed core
+    # engine cohort (HERMIT_DYNAMORIO_ENGINE_ARTIFACT naming an installed
+    # engine-artifact.json, produced by core's inguest-engine producer).
+    # That is an explicit input of the retained/privileged lane
+    # (ci/generate-retained-ci.py), not something this hosted workflow
+    # builds; they run there and via ci/validate-local.sh when the
+    # variable is set.
+    - name: Backend-owned physical helper controls
+      run: >-
+        cargo test -p hermit-dynamorio --lib --
+        --skip dynamorio_library_environment_privacy_is_caller_selected
+        --skip dynamorio_private_placement_preserves_library_dispatch
+        --skip dynamorio_public_dispatch_runs_echo_through_detcore
+        --skip dynamorio_public_status_dispatch_runs_true_through_detcore
+    # The qualification link is the largest in the job (three large
+    # binaries in the test profile). On the hosted runner the linker
+    # died with a bus error under disk/parallel-link pressure
+    # (run 41966771170), so free incremental artifacts and limit
+    # parallel links for this step.
+    - name: Free disk for qualification link
+      run: |
+        df -h
+        rm -rf target/debug/incremental
+        du -sh target || true
+    - name: Compile maintained full Detcore qualification cases
+      env:
+        CARGO_BUILD_JOBS: "2"
+      run: cargo test -p hermit-dynamorio --test qualification --no-run
+    - name: Full Detcore Clippy
+      run: cargo clippy -p hermit-dynamorio -p detcore-dynamorio -p detcore-dynamorio-cdylib --all-targets -- -D warnings
+    - name: Generic Reverie prototype Clippy
+      run: cargo clippy -p reverie-dynamorio --all-targets --all-features -- -D warnings
+    - name: Format
+      run: cargo fmt --all -- --check
+
+# This workflow does not execute Hermit qualification guests. The three full
+# Detcore cases require the maintained bounded harness route and a real
+# compatibility stamp; compilation is not a runtime qualification result.

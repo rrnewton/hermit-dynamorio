@@ -1,0 +1,37 @@
+[package]
+name = "reverie-dynamorio-examples"
+version = "0.5.4"
+edition = "2024"
+publish = false
+license = "BSD-2-Clause"
+
+# This is an explicit normal package selection for the existing generic Tool
+# runtime. The unified extension default remains the full Detcore path.
+[[bin]]
+name = "dynamorio-recorder"
+path = "src/bin/recorder.rs"
+
+[[bin]]
+name = "dynamorio-counter1"
+path = "src/bin/counter1.rs"
+
+[[bin]]
+name = "dynamorio-strace"
+path = "src/bin/strace.rs"
+
+[dependencies]
+anyhow = "1.0.103"
+clap = { version = "4.6.2", features = ["derive", "env", "string", "unicode", "wrap_help"] }
+reverie.workspace = true
+reverie-util.workspace = true
+reverie-dynamorio = { workspace = true, default-features = false, features = ["prototype-runtime"] }
+reverie-examples = { workspace = true, default-features = false, features = ["host"] }
+tokio = { version = "1.52.4", features = ["full", "test-util", "tracing"] }
+
+[dev-dependencies]
+serde_json = { version = "1.0.140", features = ["alloc"] }
+libc = "0.2.186"
+reverie-liteinst = { workspace = true, default-features = false }
+reverie-rpc-transport.workspace = true
+reverie-examples = { workspace = true, default-features = false, features = ["host", "test-support"] }
+tempfile = "3.27.0"
