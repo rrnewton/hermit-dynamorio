@@ -1628,6 +1628,13 @@ impl DynamoRioStatsSink {
         runner
     }
 
+    /// Read the records written so far without consuming the sink, for a
+    /// caller that must make a run-shaping decision (such as reporting a
+    /// policy refusal) before the final consuming [`Self::capture`].
+    pub fn peek_capture(&self) -> DynamoRioStatsCapture {
+        DynamoRioStatsCapture::read(&self.path)
+    }
+
     /// Read exact records after the caller has reaped the followed process tree.
     ///
     /// This consumes and removes the sink. Read failures remain completion data

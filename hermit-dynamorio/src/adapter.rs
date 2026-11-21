@@ -1254,7 +1254,7 @@ impl DynamoRioVerification {
         // latched determinism loss) must still be decoded and honoured.
         // The core's exit policy surfaces the refusal before stats are
         // consumed for completeness.
-        if dynamorio_run_was_refused(&stats.capture()) {
+        if dynamorio_run_was_refused(&stats.peek_capture()) {
             return Ok(PhysicalRun {
                 output: dynamorio_verification_output(output),
                 skid_overshoots: 0,
