@@ -3486,6 +3486,20 @@ mod tests {
         assert!(source.contains("reverie_dynamorio_runtime_background_init_v3("));
     }
 
+    fn check_native_finalize_skips_finalized(source: &str) {
+        let finalize = source
+            .split_once("static void finalize_runtime_process(void) {")
+            .unwrap()
+            .1
+            .split_once("require_evidence_flush(EVIDENCE_FRAME_FINAL);")
+            .unwrap()
+            .0;
+        assert!(
+            finalize.contains("sender->finalization_started || sender->finalized"),
+            "finalize_runtime_process must treat an already finalized sender as done"
+        );
+    }
+
     fn check_native_internal_exits(source: &str) {
         let failure_marker = source
             .split_once("static void mark_backend_failure(void) {")
@@ -3675,6 +3689,30 @@ mod tests {
     #[test]
     fn native_internal_exits_mark_the_final_outcome() {
         check_native_internal_exits(include_str!("../native/client.c"));
+    }
+
+    /// A copied policy refusal flushes its FINAL early, before the root
+    /// is killed. Exit cleanup must then treat the finalized sender as
+    /// done instead of flushing again (a second attempt prints a false
+    /// transport failure and nests an exit 101). The live evidence test
+    /// cannot catch that deterministically — the launcher kills the run
+    /// when the root dies — so this source invariant is the catch.
+    #[test]
+    fn native_finalize_treats_an_already_finalized_sender_as_done() {
+        check_native_finalize_skips_finalized(include_str!("../native/client.c"));
+    }
+
+    #[test]
+    fn native_finalize_guard_rejects_a_missing_finalized_check() {
+        let source = include_str!("../native/client.c").replacen(
+            "sender->finalization_started || sender->finalized",
+            "sender->finalization_started",
+            1,
+        );
+        let result = std::panic::catch_unwind(|| {
+            check_native_finalize_skips_finalized(&source);
+        });
+        assert!(result.is_err(), "the missing-check mutant must be refused");
     }
 
     #[test]
