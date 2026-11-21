@@ -4110,7 +4110,7 @@ mod tests {
         assert_eq!(
             output.status.code(),
             Some(POLICY_REFUSAL_EXIT_CODE),
-            "uncontained evidence refusal must surface as 122: {output:?}"
+            "evidence refusal without an isolated group must surface as 122: {output:?}"
         );
         assert!(
             String::from_utf8_lossy(&output.stderr)
