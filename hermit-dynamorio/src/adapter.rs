@@ -358,14 +358,6 @@ fn finish_single_run_dynamorio_stats(
     }
 }
 
-/// `status`, or a failed status when any process image of the run ended on a
-/// backend or Tool failure.
-///
-/// The native client ends such a process with exit code 101. When the guest
-/// tree has no isolated process group (`--allow-unsupported-syscalls` without
-/// `--verify`), that ends only the failing process, and a parent that ignores
-/// its child's status can still finish the run with any status, 0 included.
-/// The failing image flags its stats record, so the run fails here instead.
 /// Whether any process image of the run ended on a policy refusal, with
 /// no backend failure in the same run (a failure is the stronger outcome
 /// and keeps its existing handling). This is the only trigger for the
@@ -377,6 +369,15 @@ fn dynamorio_run_was_refused(capture: &DynamoRioStatsCapture) -> bool {
         .is_ok_and(|stats| stats.policy_refusals() > 0 && stats.backend_failures() == 0)
 }
 
+/// `status`, or a failed status when any process image of the run ended on a
+/// backend or Tool failure (or the refusal status when one ended on a
+/// policy refusal).
+///
+/// The native client ends such a process with exit code 101. When the guest
+/// tree has no isolated process group (`--allow-unsupported-syscalls` without
+/// `--verify`), that ends only the failing process, and a parent that ignores
+/// its child's status can still finish the run with any status, 0 included.
+/// The failing image flags its stats record, so the run fails here instead.
 fn fail_on_dynamorio_backend_failure(
     status: ExitStatus,
     capture: Option<&DynamoRioStatsCapture>,

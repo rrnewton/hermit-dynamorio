@@ -327,7 +327,10 @@ fn native_physical_decoding_precedes_materialization_and_completion() {
     // The normal path materializes before it completes. The only earlier
     // completion is the policy-refusal report on a failed decode, which
     // must be guarded by the flagged-record predicate, never by an exit
-    // code a guest controls.
+    // code a guest controls: exactly two completions exist, the refusal
+    // one sits between the decode and the materialization behind its
+    // guard, and no exit-code check appears anywhere in this path.
+    assert_eq!(physical.matches("Ok(PhysicalRun").count(), 2);
     assert!(
         physical.find("materialize_dynamorio_evidence_log").unwrap()
             < physical.rfind("Ok(PhysicalRun").unwrap()
@@ -338,4 +341,5 @@ fn native_physical_decoding_precedes_materialization_and_completion() {
         refusal_guard < refusal_return
             && refusal_return < physical.find("materialize_dynamorio_evidence_log").unwrap()
     );
+    assert!(!physical.contains("status.code()"));
 }

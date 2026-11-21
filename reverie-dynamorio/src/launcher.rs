@@ -4071,6 +4071,55 @@ mod tests {
         }
     }
 
+    #[test]
+    #[ignore = "requires built DynamoRIO and native client; run explicitly with --ignored"]
+    fn a_copied_policy_refusal_sends_one_final_without_containment() {
+        // Without an isolated process group the root is not killed, so the
+        // copied child deterministically reaches exit cleanup after its
+        // early refusal FINAL. Cleanup must recognize the finalized sender
+        // instead of sending a second FINAL (which used to print a false
+        // transport failure and nest an exit 101).
+        let directory = tempfile::tempdir().unwrap();
+        let source =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/evidence_vfork_open_exec.c");
+        let fixture = directory.path().join("copied-policy-uncontained");
+        let compiler = std::env::var_os("CC").unwrap_or_else(|| "cc".into());
+        assert!(
+            Command::new(compiler)
+                .args(["-std=gnu11", "-O2", "-Wall", "-Wextra", "-Werror"])
+                .arg(source)
+                .arg("-o")
+                .arg(&fixture)
+                .status()
+                .unwrap()
+                .success()
+        );
+        let file = tempfile::tempfile().unwrap();
+        let runner = DynamoRioRunner::from_env()
+            .unwrap()
+            .evidence_file(&file)
+            .unwrap()
+            .client_argument("-test-copied-policy-refusal");
+        let mut guest = Command::new(&fixture);
+        guest.arg("terminal-failure").env_remove(crate::TOOL_ENV);
+        let output = runner.output(&guest).unwrap();
+        assert_eq!(
+            output.status.code(),
+            Some(POLICY_REFUSAL_EXIT_CODE),
+            "uncontained evidence refusal must surface as 122: {output:?}"
+        );
+        assert!(
+            String::from_utf8_lossy(&output.stderr)
+                .contains("policy refusal for syscall 145 in copied child"),
+            "the refusal must be named: {output:?}"
+        );
+        assert!(
+            !String::from_utf8_lossy(&output.stderr)
+                .contains("protected evidence transport failed"),
+            "the refusal FINAL must be sent exactly once: {output:?}"
+        );
+    }
+
     #[tokio::test]
     async fn caller_activation_failure_retains_the_reaped_child_output() {
         let directory = tempfile::tempdir().unwrap();
