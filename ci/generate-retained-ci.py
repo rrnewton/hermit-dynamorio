@@ -204,7 +204,7 @@ def main(argv=None):
     # builds/lists the owner selectors through the same core wrapper at its own cwd.
     all_labels=sorted({label for row in catalog['steps'] if 'NEXTEST_PREPARED_BUILD_SELECTION' in row.get('env',{}) for label in row['labels']})
     by_tag={r['group']+'.'+r['job']:r for r in steps}
-    for context,anchor in (('host','build.workspace'),('pinned','build.workspace_in_pinned_root')):
+    for context,anchor in (('host','build.workspace_on_host'),('pinned','build.workspace_in_pinned_root')):
         if anchor not in by_tag:raise ValueError('missing original core preparation owner '+anchor)
         row=copy.deepcopy(by_tag[anchor]);row['group']='build';row['job']=owner+'_nextest'+('_in_pinned_root' if context=='pinned' else '')
         row['fail_fast_family']=owner+'_nextest'+('_in_pinned_root' if context=='pinned' else '');row['labels']=all_labels;row['result_manifests']=[];row['deps']=[anchor,'build.rust_scripts'+('_in_pinned_root' if context=='pinned' else '')]
