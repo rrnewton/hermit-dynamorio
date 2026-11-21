@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "origin_h_sha": "7db9c9c84334fb8939e9a62c8c914305b8d3f45f",
-  "origin_dag_sha256": "6490ce73707e7f39790917b6f5fa06a17b8d424a95bcb4c6690a4ad2e96580a9",
+  "origin_h_sha": "22ec5002541d8f154a4bb17ae9d7051e05c236f5",
+  "origin_dag_sha256": "5a4581cc25c2ea83d1f2230d373fecb6f900de413c38e2505b3a72f1fd77f559",
   "owner": "dynamorio",
   "steps": [
     {
@@ -519,9 +519,9 @@
     },
     {
       "group": "test",
-      "job": "isolation_matrix_dbt_in_guest",
+      "job": "isolation_matrix_dbt_mixed",
       "desc": "Isolation matrix on DBT, LiteInst and in-guest-trap, held to its expected-mismatch ledger",
-      "description": "Runs the backend isolation matrix (tests/isolation/conformance.rs, the container contract of https://github.com/rrnewton/hermit/issues/4009) for every required cell of DBT, LiteInst and in-guest-trap; measured 219 s serially in the pinned root: the probe tests/isolation/backend_isolation.c beside a native baseline, each command a bounded child of the local executor, up to HERMIT_ISOLATION_JOBS cells at once (the cells of one cohort, which share an input fixture across backends, one at a time; output and the ledger check keep the selection order), every assertion row checked by hermit-cli/tests/common/backend_isolation.rs. No cell fully matches on any backend yet, so the node holds the matrix to tests/isolation/expected-mismatches.tsv: every cell that collects no guest observations, and every assertion that does not match, must be a ledger row naming its backend and linking its issue, and a row that no longer describes a failure on a backend it names fails the node until it is deleted, so what now matches stays matched. The ledger was measured in this pinned root; two host runs agreed cell for cell. Artifacts (assertion rows, per-backend totals, the required-cell ledger) are kept in target/ci/isolation-matrix/dbt-in-guest. It publishes one structured result row per cell it checks, through ci/conformance-test-counts.sh, so validate's per-node coverage counts it as executed; until 2026-10-17 it wrote none, and every full validation that planned it was NOT-VALIDATED. The complete original mixed matrix remains one strict aggregate under the DR physical catalog, using the common core driver and explicit held per-owner frontend ELFs. All original dbt,liteinst,in-guest-trap cells, cross-backend input cohorts, native baseline, mismatch ledger/staleness rules, ordering, caps and result owner stay unchanged. No core optional feature or SDK build is introduced.",
+      "description": "Runs the backend isolation matrix (tests/isolation/conformance.rs, the container contract of https://github.com/rrnewton/hermit/issues/4009) for every required cell of DBT, LiteInst and in-guest-trap; measured 219 s serially in the pinned root: the probe tests/isolation/backend_isolation.c beside a native baseline, each command a bounded child of the local executor, up to HERMIT_ISOLATION_JOBS cells at once (the cells of one cohort, which share an input fixture across backends, one at a time; output and the ledger check keep the selection order), every assertion row checked by hermit-cli/tests/common/backend_isolation.rs. No cell fully matches on any backend yet, so the node holds the matrix to tests/isolation/expected-mismatches.tsv: every cell that collects no guest observations, and every assertion that does not match, must be a ledger row naming its backend and linking its issue, and a row that no longer describes a failure on a backend it names fails the node until it is deleted, so what now matches stays matched. The ledger was measured in this pinned root; two host runs agreed cell for cell. Artifacts (assertion rows, per-backend totals, the required-cell ledger) are kept in target/ci/isolation-matrix/dbt-in-guest. It publishes one structured result row per cell it checks, through ci/conformance-test-counts.sh, so validate's per-node coverage counts it as executed; until 2026-10-17 it wrote none, and every full validation that planned it was NOT-VALIDATED. The complete original mixed matrix remains one strict aggregate under the DR physical catalog, using the common core driver and explicit held per-owner frontend ELFs. All original dbt,liteinst,in-guest-trap cells, cross-backend input cohorts, native baseline, mismatch ledger/staleness rules, ordering and caps stay unchanged; the result owner follows this renamed tag, because the core owns test.isolation_matrix_dbt_in_guest for its first-party LiteInst/in-guest-trap selection. No core optional feature or SDK build is introduced.",
       "labels": [
         "full"
       ],
@@ -531,7 +531,7 @@
           "kind": "structured-test-results",
           "schema": 2,
           "path_env": "DAGRUN_TEST_COUNTS_PATH",
-          "owner": "test.isolation_matrix_dbt_in_guest"
+          "owner": "test.isolation_matrix_dbt_mixed"
         }
       ],
       "deps": [
@@ -561,7 +561,7 @@
         "measured_effective_cores": null,
         "measured_cpu_utilization": null
       },
-      "fail_fast_family": "test.isolation_matrix_dbt_in_guest",
+      "fail_fast_family": "test.isolation_matrix_dbt_mixed",
       "prepared_context": "pinned"
     },
     {
