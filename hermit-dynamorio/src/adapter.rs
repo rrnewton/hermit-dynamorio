@@ -1256,7 +1256,7 @@ impl DynamoRioVerification {
         // surfaces the refusal before stats are consumed for completeness.
         let evidence = match decode_dynamorio_evidence(&mut evidence_file) {
             Ok(evidence) => evidence,
-            Err(error) if dynamorio_run_was_refused(&stats.peek_capture()) => {
+            Err(_error) if dynamorio_run_was_refused(&stats.peek_capture()) => {
                 return Ok(PhysicalRun {
                     output: dynamorio_verification_output(output),
                     skid_overshoots: 0,
