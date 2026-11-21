@@ -4051,6 +4051,16 @@ mod tests {
                 Some(POLICY_REFUSAL_EXIT_CODE),
                 "attempt {attempt}: evidence refusal must surface as 122: {output:?}"
             );
+            assert!(
+                String::from_utf8_lossy(&output.stderr)
+                    .contains("policy refusal for syscall 145 in copied child"),
+                "attempt {attempt}: the refusal must be named: {output:?}"
+            );
+            assert!(
+                !String::from_utf8_lossy(&output.stderr)
+                    .contains("protected evidence transport failed"),
+                "attempt {attempt}: the refusal FINAL must be sent exactly once: {output:?}"
+            );
         }
     }
 

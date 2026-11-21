@@ -170,6 +170,43 @@ fn policy_refusal_records_map_the_run_to_exit_122() {
     );
 }
 #[test]
+fn refusal_trigger_requires_the_flagged_record_not_the_exit_code() {
+    use reverie_dynamorio::backend_stats::DynamoRioProcessRecord;
+    use reverie_dynamorio::backend_stats::encode_process_record;
+
+    // A guest that merely exits 122 leaves an ordinary record: no refusal.
+    let ordinary = DynamoRioStatsCapture::Records(
+        encode_process_record(&DynamoRioProcessRecord::default()).to_vec(),
+    );
+    assert!(!dynamorio_run_was_refused(&ordinary));
+    assert!(!dynamorio_run_was_refused(&DynamoRioStatsCapture::Missing));
+
+    let refused = DynamoRioStatsCapture::Records(
+        encode_process_record(&DynamoRioProcessRecord {
+            policy_refusal: true,
+            ..Default::default()
+        })
+        .to_vec(),
+    );
+    assert!(dynamorio_run_was_refused(&refused));
+
+    // A backend failure in the same run is the stronger outcome.
+    let both = DynamoRioStatsCapture::Records(
+        [
+            encode_process_record(&DynamoRioProcessRecord {
+                policy_refusal: true,
+                ..Default::default()
+            }),
+            encode_process_record(&DynamoRioProcessRecord {
+                backend_failure: true,
+                ..Default::default()
+            }),
+        ]
+        .concat(),
+    );
+    assert!(!dynamorio_run_was_refused(&both));
+}
+#[test]
 fn typed_stats_capture_refuses_missing_empty_or_truncated_evidence() {
     let missing = DynamoRioStatsSink::new().unwrap();
     let error = require_dynamorio_stats(&missing.capture()).unwrap_err();

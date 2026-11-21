@@ -6055,7 +6055,9 @@ static void finalize_runtime_process(void) {
       exit_runtime_tree(101);
       return;
     }
-    if (sender->finalization_started) {
+    if (sender->finalization_started || sender->finalized) {
+      // A copied policy refusal flushed its FINAL early, before the root
+      // was killed; that acknowledged frame is this sender's finalization.
       dr_mutex_unlock(evidence_lock);
       return;
     }

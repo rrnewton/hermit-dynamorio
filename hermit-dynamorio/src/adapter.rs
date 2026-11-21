@@ -366,6 +366,17 @@ fn finish_single_run_dynamorio_stats(
 /// `--verify`), that ends only the failing process, and a parent that ignores
 /// its child's status can still finish the run with any status, 0 included.
 /// The failing image flags its stats record, so the run fails here instead.
+/// Whether any process image of the run ended on a policy refusal, with
+/// no backend failure in the same run (a failure is the stronger outcome
+/// and keeps its existing handling). This is the only trigger for the
+/// verification path's refusal report: the exit code alone is guest
+/// controlled and proves nothing.
+fn dynamorio_run_was_refused(capture: &DynamoRioStatsCapture) -> bool {
+    capture
+        .snapshot()
+        .is_ok_and(|stats| stats.policy_refusals() > 0 && stats.backend_failures() == 0)
+}
+
 fn fail_on_dynamorio_backend_failure(
     status: ExitStatus,
     capture: Option<&DynamoRioStatsCapture>,
@@ -1237,9 +1248,13 @@ impl DynamoRioVerification {
         let output = output?;
         // A policy refusal publishes no evidence artifact (the collector
         // truncates it, as for a backend failure), so report the refusal
-        // status itself instead of failing on the empty artifact. The
-        // core's exit policy surfaces it before any stats are consumed.
-        if output.status.code() == Some(DYNAMORIO_POLICY_REFUSAL_EXIT_CODE) {
+        // status itself instead of failing on the empty artifact. Trigger
+        // on the flagged refusal record, never on the exit code alone: a
+        // guest may exit 122 with no refusal, and its evidence (and any
+        // latched determinism loss) must still be decoded and honoured.
+        // The core's exit policy surfaces the refusal before stats are
+        // consumed for completeness.
+        if dynamorio_run_was_refused(&stats.capture()) {
             return Ok(PhysicalRun {
                 output: dynamorio_verification_output(output),
                 skid_overshoots: 0,
