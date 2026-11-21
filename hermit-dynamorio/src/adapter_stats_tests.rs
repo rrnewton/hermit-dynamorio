@@ -121,6 +121,55 @@ fn terminal_failure_status_requires_a_complete_flagged_record() {
     }
 }
 #[test]
+fn policy_refusal_records_map_the_run_to_exit_122() {
+    use reverie_dynamorio::backend_stats::DynamoRioProcessRecord;
+    use reverie_dynamorio::backend_stats::encode_process_record;
+
+    let capture = DynamoRioStatsCapture::Records(
+        encode_process_record(&DynamoRioProcessRecord {
+            policy_refusal: true,
+            process_identity: 7,
+            parent_identity: 3,
+            ..Default::default()
+        })
+        .to_vec(),
+    );
+    for status in [
+        ExitStatus::Signaled(reverie::Signal::SIGKILL, false),
+        ExitStatus::Exited(0),
+    ] {
+        assert_eq!(
+            fail_on_dynamorio_backend_failure(status, Some(&capture)),
+            ExitStatus::Exited(122)
+        );
+    }
+    assert_eq!(
+        fail_on_dynamorio_backend_failure(ExitStatus::Exited(122), Some(&capture)),
+        ExitStatus::Exited(122)
+    );
+    // A backend failure in the same run is the stronger outcome.
+    let both = DynamoRioStatsCapture::Records(
+        [
+            encode_process_record(&DynamoRioProcessRecord {
+                policy_refusal: true,
+                ..Default::default()
+            }),
+            encode_process_record(&DynamoRioProcessRecord {
+                backend_failure: true,
+                ..Default::default()
+            }),
+        ]
+        .concat(),
+    );
+    assert_eq!(
+        fail_on_dynamorio_backend_failure(
+            ExitStatus::Signaled(reverie::Signal::SIGKILL, false),
+            Some(&both)
+        ),
+        ExitStatus::Exited(101)
+    );
+}
+#[test]
 fn typed_stats_capture_refuses_missing_empty_or_truncated_evidence() {
     let missing = DynamoRioStatsSink::new().unwrap();
     let error = require_dynamorio_stats(&missing.capture()).unwrap_err();

@@ -49,6 +49,7 @@ const FRAME_ERROR: u8 = 6;
 const FRAME_CHILD: u8 = 7;
 const FINAL_GUEST_COMPLETED: u8 = 0;
 const FINAL_BACKEND_FAILURE: u8 = 1;
+const FINAL_POLICY_REFUSAL: u8 = 2;
 
 const FILE_MAGIC: &[u8; 8] = b"RVDBTEF1";
 const FILE_VERSION: u16 = 1;
@@ -81,6 +82,7 @@ const SESSION_FINISHED: u8 = 3;
 enum FinalOutcome {
     GuestCompleted,
     BackendFailure,
+    PolicyRefusal,
 }
 
 impl TryFrom<&[u8]> for FinalOutcome {
@@ -90,6 +92,7 @@ impl TryFrom<&[u8]> for FinalOutcome {
         match payload {
             [FINAL_GUEST_COMPLETED] => Ok(Self::GuestCompleted),
             [FINAL_BACKEND_FAILURE] => Ok(Self::BackendFailure),
+            [FINAL_POLICY_REFUSAL] => Ok(Self::PolicyRefusal),
             [_] => Err(invalid_data(
                 "DYNAMORIO evidence FINAL frame outcome is unknown",
             )),
@@ -98,6 +101,28 @@ impl TryFrom<&[u8]> for FinalOutcome {
             )),
         }
     }
+}
+
+/// Terminal evidence outcome for a run that ended on a policy refusal
+/// (exit 122), distinct from a backend failure. The launcher maps it to
+/// exit status 122 instead of reporting an evidence failure.
+#[derive(Debug)]
+pub(crate) struct DynamoRioPolicyRefusal;
+
+impl std::fmt::Display for DynamoRioPolicyRefusal {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("DYNAMORIO run ended on a policy refusal")
+    }
+}
+
+impl std::error::Error for DynamoRioPolicyRefusal {}
+
+/// Whether `error` carries the terminal policy-refusal outcome, so the
+/// launcher can map it to exit status 122 rather than an evidence failure.
+pub(crate) fn is_policy_refusal(error: &io::Error) -> bool {
+    error
+        .get_ref()
+        .is_some_and(|source| source.downcast_ref::<DynamoRioPolicyRefusal>().is_some())
 }
 
 #[derive(Debug)]
@@ -695,6 +720,7 @@ struct Collector {
     hash: u64,
     saw_start: bool,
     backend_failure: bool,
+    policy_refusal: bool,
 }
 
 impl Collector {
@@ -714,6 +740,7 @@ impl Collector {
             hash: FNV_OFFSET,
             saw_start: false,
             backend_failure: false,
+            policy_refusal: false,
         }
     }
 
@@ -846,6 +873,7 @@ impl Collector {
                 }
                 self.terminal_processes.insert(process);
                 self.backend_failure |= outcome == FinalOutcome::BackendFailure;
+                self.policy_refusal |= outcome == FinalOutcome::PolicyRefusal;
             }
             FRAME_ERROR => {
                 let detail = String::from_utf8_lossy(payload);
@@ -1134,6 +1162,12 @@ impl Collector {
         }
         if self.backend_failure {
             return Err(io::Error::other(DynamoRioBackendFailure));
+        }
+        // A refusal terminated the tree, so other images may have no
+        // FINAL; report the refusal itself rather than an integrity
+        // error about the missing frames.
+        if self.policy_refusal {
+            return Err(io::Error::other(DynamoRioPolicyRefusal));
         }
         if self.images.values().any(|image| !image.initialized) {
             return Err(invalid_data(
@@ -2580,7 +2614,7 @@ mod tests {
         for (payload, expected) in [
             (Vec::new(), "wrong length"),
             (vec![FINAL_GUEST_COMPLETED, 0], "wrong length"),
-            (vec![2], "unknown"),
+            (vec![3], "unknown"),
         ] {
             let mut collector = Collector::new();
             start_and_initialize(&mut collector, process);
@@ -2653,6 +2687,42 @@ mod tests {
                 .and_then(|source| source.downcast_ref::<DynamoRioBackendFailure>())
                 .is_some(),
             "collector returned the wrong error: {error}"
+        );
+    }
+
+    #[test]
+    fn collector_reports_a_child_policy_refusal_before_a_missing_root_final() {
+        let root = ProcessKey {
+            pid: 37,
+            start_time: 43,
+        };
+        let child = ProcessKey {
+            pid: 38,
+            start_time: 44,
+        };
+        let mut child_payload = Vec::from(child.pid.to_le_bytes());
+        child_payload.extend_from_slice(&child.start_time.to_le_bytes());
+        let mut collector = Collector::new();
+        start_and_initialize(&mut collector, root);
+        collector
+            .absorb(FRAME_CHILD, root, 2, &child_payload)
+            .unwrap();
+        start_and_initialize(&mut collector, child);
+        collector
+            .absorb(FRAME_FINAL, child, 2, &[FINAL_POLICY_REFUSAL])
+            .unwrap();
+
+        let error = collector.finish().err().unwrap();
+        assert!(
+            is_policy_refusal(&error),
+            "collector returned the wrong error: {error}"
+        );
+        assert!(
+            error
+                .get_ref()
+                .and_then(|source| source.downcast_ref::<DynamoRioBackendFailure>())
+                .is_none(),
+            "a refusal must not be reported as a backend failure: {error}"
         );
     }
 

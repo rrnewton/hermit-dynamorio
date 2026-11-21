@@ -323,6 +323,12 @@ fn write_dynamorio_engagement(
 /// or Tool failure (`exit_runtime_tree(101)` in reverie-dynamorio's client).
 const DYNAMORIO_BACKEND_FAILURE_EXIT_CODE: i32 = 101;
 
+/// The exit code for a run a guest process ended on a policy refusal
+/// (Detcore's own refusal status). A copied child's refusal kills the
+/// run's root, so the flagged stats record, not the reaped status, is
+/// how the refusal reaches this adapter.
+const DYNAMORIO_POLICY_REFUSAL_EXIT_CODE: i32 = 122;
+
 /// Prints and records a single run's statistics as requested, and returns them
 /// when they could be read. A run always captures them: they are also how a
 /// backend failure in a guest child is found (see [`fail_on_dynamorio_backend_failure`]).
@@ -367,10 +373,29 @@ fn fail_on_dynamorio_backend_failure(
     // A complete failure-only record remains authoritative even if the root
     // was killed before it could publish execution counters. It cannot prove
     // engagement or verification completeness; require_dynamorio_stats owns those.
-    let failures = capture
-        .and_then(|capture| capture.snapshot().ok())
+    let snapshot = capture.and_then(|capture| capture.snapshot().ok());
+    let failures = snapshot
+        .as_ref()
         .map_or(0, |stats| stats.backend_failures());
-    if failures == 0 || status == ExitStatus::Exited(DYNAMORIO_BACKEND_FAILURE_EXIT_CODE) {
+    if failures == 0 {
+        // No backend failure: a flagged policy refusal still ended the
+        // run, and the root's reaped status (killed, in contained runs)
+        // is not the refusal's outcome.
+        let refusals = snapshot
+            .as_ref()
+            .map_or(0, |stats| stats.policy_refusals());
+        if refusals == 0 || status == ExitStatus::Exited(DYNAMORIO_POLICY_REFUSAL_EXIT_CODE) {
+            return status;
+        }
+        eprintln!(
+            "hermit: [dynamorio backend] {refusals} guest process(es) ended on a policy refusal \
+             (exit {DYNAMORIO_POLICY_REFUSAL_EXIT_CODE}), but the guest tree finished with \
+             {status:?}; failing the run with exit {DYNAMORIO_POLICY_REFUSAL_EXIT_CODE}. The \
+             refusing process's diagnostic is above."
+        );
+        return ExitStatus::Exited(DYNAMORIO_POLICY_REFUSAL_EXIT_CODE);
+    }
+    if status == ExitStatus::Exited(DYNAMORIO_BACKEND_FAILURE_EXIT_CODE) {
         return status;
     }
     eprintln!(
