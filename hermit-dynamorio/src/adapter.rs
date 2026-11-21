@@ -1247,31 +1247,33 @@ impl DynamoRioVerification {
         drop(deadlock_recording);
         let output = output?;
         // A policy refusal publishes no evidence artifact (the collector
-        // truncates it, as for a backend failure), so report the refusal
-        // status itself instead of failing on the empty artifact. Trigger
-        // on the flagged refusal record, never on the exit code alone: a
-        // guest may exit 122 with no refusal, and its evidence (and any
-        // latched determinism loss) must still be decoded and honoured.
-        // The core's exit policy surfaces the refusal before stats are
-        // consumed for completeness.
-        if dynamorio_run_was_refused(&stats.peek_capture()) {
-            return Ok(PhysicalRun {
-                output: dynamorio_verification_output(output),
-                skid_overshoots: 0,
-                terminal_outcome: None,
-                latches: RunLatches {
-                    determinism_loss: None,
-                    log_sink_failure: None,
-                },
-                pending: Pending(DynamoRioRunCompletion {
-                    stats,
-                    initialization_records: 0,
-                    terminal_stdin: self.terminal,
-                }),
-            });
-        }
-        let evidence = decode_dynamorio_evidence(&mut evidence_file)
-            .map_err(|error| error.context(hermit::BackendRunFailure))?;
+        // truncates it, as for a backend failure), so its decode fails;
+        // report the refusal status itself in that case instead of the
+        // empty-artifact error. Trigger on the flagged refusal record,
+        // never on the exit code alone: a guest may exit 122 with no
+        // refusal, and its evidence (and any latched determinism loss)
+        // must still be decoded and honoured. The core's exit policy
+        // surfaces the refusal before stats are consumed for completeness.
+        let evidence = match decode_dynamorio_evidence(&mut evidence_file) {
+            Ok(evidence) => evidence,
+            Err(error) if dynamorio_run_was_refused(&stats.peek_capture()) => {
+                return Ok(PhysicalRun {
+                    output: dynamorio_verification_output(output),
+                    skid_overshoots: 0,
+                    terminal_outcome: None,
+                    latches: RunLatches {
+                        determinism_loss: None,
+                        log_sink_failure: None,
+                    },
+                    pending: Pending(DynamoRioRunCompletion {
+                        stats,
+                        initialization_records: 0,
+                        terminal_stdin: self.terminal,
+                    }),
+                });
+            }
+            Err(error) => return Err(error.context(hermit::BackendRunFailure)),
+        };
         materialize_dynamorio_evidence_log(&evidence, capture.log, capture.path)
             .map_err(|error| error.context(hermit::BackendRunFailure))?;
         Ok(PhysicalRun {

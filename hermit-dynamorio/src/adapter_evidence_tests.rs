@@ -324,8 +324,18 @@ fn native_physical_decoding_precedes_materialization_and_completion() {
         physical.find("decode_dynamorio_evidence").unwrap()
             < physical.find("materialize_dynamorio_evidence_log").unwrap()
     );
+    // The normal path materializes before it completes. The only earlier
+    // completion is the policy-refusal report on a failed decode, which
+    // must be guarded by the flagged-record predicate, never by an exit
+    // code a guest controls.
     assert!(
         physical.find("materialize_dynamorio_evidence_log").unwrap()
-            < physical.find("Ok(PhysicalRun").unwrap()
+            < physical.rfind("Ok(PhysicalRun").unwrap()
+    );
+    let refusal_return = physical.find("Ok(PhysicalRun").unwrap();
+    let refusal_guard = physical.find("dynamorio_run_was_refused").unwrap();
+    assert!(
+        refusal_guard < refusal_return
+            && refusal_return < physical.find("materialize_dynamorio_evidence_log").unwrap()
     );
 }
