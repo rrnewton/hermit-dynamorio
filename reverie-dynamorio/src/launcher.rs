@@ -3872,6 +3872,107 @@ mod tests {
         }
     }
 
+    #[test]
+    #[ignore = "requires built DynamoRIO and native client; run explicitly with --ignored"]
+    fn a_copied_policy_refusal_and_unknown_action_publish_the_right_records() {
+        use crate::backend_stats::WIRE_RECORD_LEN;
+        use crate::backend_stats::decode_process_record;
+
+        let directory = tempfile::tempdir().unwrap();
+        let source =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/evidence_vfork_open_exec.c");
+        let fixture = directory.path().join("copied-policy-refusal");
+        let compiler = std::env::var_os("CC").unwrap_or_else(|| "cc".into());
+        assert!(
+            Command::new(compiler)
+                .args(["-std=gnu11", "-O2", "-Wall", "-Wextra", "-Werror"])
+                .arg(source)
+                .arg("-o")
+                .arg(&fixture)
+                .status()
+                .unwrap()
+                .success()
+        );
+
+        for (flag, backend_failure, expected_diagnostic) in [
+            ("-test-copied-policy-refusal", false, None),
+            (
+                "-test-copied-unknown-action",
+                true,
+                Some("unknown copied syscall action 99 for syscall 145"),
+            ),
+        ] {
+            let sink = DynamoRioStatsSink::new().unwrap();
+            let [stats_flag, path] = sink.client_arguments(sink.directory());
+            let runner = DynamoRioRunner::from_env()
+                .unwrap()
+                .isolated_process_group(true)
+                .client_argument(stats_flag)
+                .client_argument(path)
+                .client_argument(flag);
+            let mut guest = Command::new(&fixture);
+            guest.arg("terminal-failure").env_remove(crate::TOOL_ENV);
+            for selector in [
+                "HERMIT_DYNAMORIO_TEST_REWRITE_EXIT",
+                "HERMIT_DYNAMORIO_TEST_INJECT_INVALID_CLONE",
+                "HERMIT_DYNAMORIO_TEST_SET_REG",
+                "HERMIT_DYNAMORIO_TEST_COMPARE_EXCHANGE",
+                "HERMIT_DYNAMORIO_TEST_PPID",
+                "HERMIT_DYNAMORIO_TEST_BACKTRACE",
+                "HERMIT_DYNAMORIO_STRACE",
+                "HERMIT_DYNAMORIO_SYSCALL_HISTOGRAM",
+                "HERMIT_DYNAMORIO_COUNTER1",
+                "HERMIT_DYNAMORIO_COUNTER2",
+                "HERMIT_DYNAMORIO_CHUNKY_PRINT",
+                "HERMIT_DYNAMORIO_CHROME_TRACE",
+                "HERMIT_DYNAMORIO_CHAOS",
+                "HERMIT_DYNAMORIO_NOOP",
+                "HERMIT_DYNAMORIO_COUNTER1_EXACT",
+                "HERMIT_DYNAMORIO_COUNTER2_EXACT",
+            ] {
+                guest.env_remove(selector);
+            }
+            let output = runner.output(&guest).unwrap();
+            assert_eq!(
+                output.status.signal(),
+                Some(libc::SIGKILL),
+                "{flag}: {output:?}"
+            );
+            assert_eq!(
+                output.stdout.len(),
+                12,
+                "{flag}: identity only, no after-call marker: {output:?}"
+            );
+            if let Some(expected) = expected_diagnostic {
+                assert!(
+                    String::from_utf8_lossy(&output.stderr).contains(expected),
+                    "{flag}: {output:?}"
+                );
+            } else {
+                assert!(
+                    !String::from_utf8_lossy(&output.stderr)
+                        .contains("unsupported syscall 145 in copied child"),
+                    "{flag}: policy refusal must not add the unsupported line: {output:?}"
+                );
+            }
+            let capture = sink.capture();
+            let bytes = capture
+                .records()
+                .expect("copied terminal record must publish before root termination");
+            assert_eq!(bytes.len(), WIRE_RECORD_LEN, "{flag}: exactly one record");
+            let (record, consumed) = decode_process_record(bytes).unwrap();
+            assert_eq!(consumed, bytes.len());
+            assert_eq!(record.backend_failure, backend_failure, "{flag}");
+            let snapshot = capture.snapshot().unwrap();
+            assert_eq!(snapshot.process_images(), 1, "{flag}");
+            assert_eq!(
+                snapshot.backend_failures(),
+                usize::from(backend_failure),
+                "{flag}"
+            );
+        }
+    }
+
     #[tokio::test]
     async fn caller_activation_failure_retains_the_reaped_child_output() {
         let directory = tempfile::tempdir().unwrap();

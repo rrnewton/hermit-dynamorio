@@ -720,6 +720,8 @@ static bool test_binary_evidence;
 static bool test_leave_process_clone_result_pending;
 static bool test_backend_failure;
 static bool test_copied_backend_failure;
+static bool test_copied_policy_refusal;
+static bool test_copied_unknown_action;
 static bool test_skip_terminal_cleanup;
 static bool test_backend_failure_sender_lookup_miss;
 static bool test_compare_exchange;
@@ -917,6 +919,17 @@ static void exit_copied_syscall_failure(process_control_t* process) {
       publish_copied_terminal_stats(process); // Exercise idempotent publication.
   }
   terminate_runtime_tree(101);
+}
+
+// The copied gate has already emitted its named policy-refusal
+// diagnostic. Do not mark this as a backend failure: publish the same
+// early terminal record a copied backend failure needs, then end the
+// isolated run with Detcore's policy-refusal exit status.
+static void exit_copied_policy_refusal(process_control_t* process) {
+  if (runtime_process_group != 0 &&
+      runtime_process_group != dr_get_process_id())
+    publish_copied_terminal_stats(process);
+  terminate_runtime_tree(122);
 }
 
 #define EVIDENCE_CHANNEL_HEADER_LEN 80
@@ -6629,7 +6642,15 @@ static bool pre_syscall(void* drcontext, int sysnum) {
       (copied_clone_flags & CLONE_THREAD) == 0 &&
       (copied_clone_flags & CLONE_VFORK) != 0;
 
-  if (protect_evidence_socket_syscall(
+  /* For a copied child's open family, let the copied gate decide first.
+   * Its named refusal must precede the evidence guard's own O_PATH lookup
+   * and unnamed EPERM. This only reorders the checks: if the gate allows
+   * native execution, the deferred evidence guard below still runs before
+   * any native effect. */
+  bool defer_evidence_open_family = has_copied_runtime() &&
+      (sysnum == SYS_open || sysnum == SYS_openat || sysnum == SYS_creat);
+  if (!defer_evidence_open_family &&
+      protect_evidence_socket_syscall(
           (uintptr_t)drcontext, sysnum, args, &result)) {
     dr_syscall_set_result(drcontext, (reg_t)result);
     return false;
@@ -6693,6 +6714,10 @@ static bool pre_syscall(void* drcontext, int sysnum) {
     evidence_callback_leave();
     if (test_copied_backend_failure && sysnum == SYS_sched_getscheduler)
       copied_action = 1;
+    if (test_copied_policy_refusal && sysnum == SYS_sched_getscheduler)
+      copied_action = 3;
+    if (test_copied_unknown_action && sysnum == SYS_sched_getscheduler)
+      copied_action = 99;
     // Negative actions are deterministic errno values synthesized by the
     // copied-child policy. They avoid executing a host-dependent syscall while
     // preserving the error that the instrumented root observes.
@@ -6708,11 +6733,32 @@ static bool pre_syscall(void* drcontext, int sysnum) {
       exit_copied_syscall_failure(process);
       return false;
     }
+    if (copied_action == 3) {
+      // HERMIT_COPIED_ACTION_POLICY_REFUSAL. The gate has already named
+      // the refusal; do not add the generic unsupported line or mark a
+      // backend failure.
+      exit_copied_policy_refusal(process);
+      return false;
+    }
+    if (copied_action != 0 && copied_action != 2) {
+      dr_fprintf(
+          diagnostic_file,
+          "detcore-dynamorio: unknown copied syscall action %d for syscall %d\n",
+          copied_action,
+          sysnum);
+      exit_copied_syscall_failure(process);
+      return false;
+    }
+    if (defer_evidence_open_family &&
+        protect_evidence_socket_syscall(
+            (uintptr_t)drcontext, sysnum, args, &result)) {
+      dr_syscall_set_result(drcontext, (reg_t)result);
+      return false;
+    }
     if (copied_action == 2) {
       report_copied_unsupported_syscall(sysnum);
       return true;
     }
-    DR_ASSERT(copied_action == 0);
 #ifdef SYS_execveat
     // TODO-HUMAN-REVIEW(PR-587): Fail closed before copied children bypass the
     // Detcore runtime callback.
@@ -6740,6 +6786,12 @@ static bool pre_syscall(void* drcontext, int sysnum) {
       require_evidence_flush(EVIDENCE_FRAME_EXEC);
     }
     return execute;
+  }
+  if (defer_evidence_open_family &&
+      protect_evidence_socket_syscall(
+          (uintptr_t)drcontext, sysnum, args, &result)) {
+    dr_syscall_set_result(drcontext, (reg_t)result);
+    return false;
   }
   if (caller_mode()) {
     if (!runtime_ready_for_image()) {
@@ -8110,6 +8162,10 @@ DR_EXPORT void dr_client_main(client_id_t id, int argc, const char* argv[]) {
       test_backend_failure = true;
     else if (strcmp(argv[i], "-test-copied-backend-failure") == 0)
       test_copied_backend_failure = true;
+    else if (strcmp(argv[i], "-test-copied-policy-refusal") == 0)
+      test_copied_policy_refusal = true;
+    else if (strcmp(argv[i], "-test-copied-unknown-action") == 0)
+      test_copied_unknown_action = true;
     else if (strcmp(argv[i], "-test-skip-terminal-cleanup") == 0)
       test_skip_terminal_cleanup = true;
     else if (strcmp(argv[i], "-test-backend-failure-sender-lookup-miss") == 0)
