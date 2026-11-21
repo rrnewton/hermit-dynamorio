@@ -1235,6 +1235,26 @@ impl DynamoRioVerification {
         };
         drop(deadlock_recording);
         let output = output?;
+        // A policy refusal publishes no evidence artifact (the collector
+        // truncates it, as for a backend failure), so report the refusal
+        // status itself instead of failing on the empty artifact. The
+        // core's exit policy surfaces it before any stats are consumed.
+        if output.status.code() == Some(DYNAMORIO_POLICY_REFUSAL_EXIT_CODE) {
+            return Ok(PhysicalRun {
+                output: dynamorio_verification_output(output),
+                skid_overshoots: 0,
+                terminal_outcome: None,
+                latches: RunLatches {
+                    determinism_loss: None,
+                    log_sink_failure: None,
+                },
+                pending: Pending(DynamoRioRunCompletion {
+                    stats,
+                    initialization_records: 0,
+                    terminal_stdin: self.terminal,
+                }),
+            });
+        }
         let evidence = decode_dynamorio_evidence(&mut evidence_file)
             .map_err(|error| error.context(hermit::BackendRunFailure))?;
         materialize_dynamorio_evidence_log(&evidence, capture.log, capture.path)

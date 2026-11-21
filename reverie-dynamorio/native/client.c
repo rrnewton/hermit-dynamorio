@@ -923,23 +923,9 @@ static void exit_copied_syscall_failure(process_control_t* process) {
   terminate_runtime_tree(101);
 }
 
-// Ends this copied child on a policy refusal. The refusal is marked
-// (mark_policy_refusal) so it reaches consumers as a positive outcome:
-// the stats record carries the policy-refusal flag and the protected
-// evidence FINAL reports the refusal outcome. Publish the same early
-// terminal record a copied backend failure needs, because terminating
-// the run's root races this child's own cleanup in contained runs.
-// This child then exits 122; in a contained run the root is killed, so
-// the launcher and adapter map the flagged record (or the evidence
-// refusal outcome) to the run's 122 result. Nothing here marks a
-// backend failure.
-static void exit_copied_policy_refusal(process_control_t* process) {
-  mark_policy_refusal();
-  if (runtime_process_group != 0 &&
-      runtime_process_group != dr_get_process_id())
-    publish_copied_terminal_stats(process);
-  terminate_runtime_tree(122);
-}
+// Defined after require_evidence_flush: the refusal FINAL must be
+// flushed (and acknowledged) before the run's root is killed.
+static void exit_copied_policy_refusal(process_control_t* process);
 
 #define EVIDENCE_CHANNEL_HEADER_LEN 80
 #define EVIDENCE_TOKEN_LEN 32
@@ -1464,6 +1450,28 @@ static void require_evidence_flush(unsigned char terminal_kind) {
         diagnostic_file, "reverie-dynamorio: protected evidence transport failed\n");
     exit_runtime_tree(101);
   }
+}
+
+// Ends this copied child on a policy refusal. Order matters: an active
+// mapping capture is retired first (it must not enter evidence logging),
+// then the refusal is marked so the evidence FINAL and the stats record
+// both carry it, then the FINAL is flushed and acknowledged BEFORE
+// terminate_runtime_tree kills the run's root (the launcher kills the
+// whole run when the root dies, so a FINAL sent only from event_exit
+// would race that kill). The early stats record is published for the
+// same reason. This child then exits 122; in a contained run the root
+// is killed, so the launcher and adapter map the refusal outcome (or
+// the flagged record) to the run's 122 result. Nothing here marks a
+// backend failure.
+static void exit_copied_policy_refusal(process_control_t* process) {
+  if (mapping_capture_active())
+    mapping_capture_terminal();
+  mark_policy_refusal();
+  require_evidence_flush(EVIDENCE_FRAME_FINAL);
+  if (runtime_process_group != 0 &&
+      runtime_process_group != dr_get_process_id())
+    publish_copied_terminal_stats(process);
+  terminate_runtime_tree(122);
 }
 
 static void reverie_dynamorio_emit_evidence(const char* buf, size_t len) {
@@ -4213,6 +4221,10 @@ static int64_t refuse_dup_onto_internal_descriptor(int sysnum, int target) {
   // Mark the refusal (not a backend failure), so the protected evidence
   // FINAL and the stats record both carry the refusal outcome and the
   // consumers map the run to 122, rather than finding its outcome missing.
+  // The mapping-capture check comes first, as in exit_runtime_tree: an
+  // active capture must not enter evidence logging.
+  if (mapping_capture_active())
+    mapping_capture_terminal();
   mark_policy_refusal();
   terminate_runtime_tree(122);
   return -EBADF;
