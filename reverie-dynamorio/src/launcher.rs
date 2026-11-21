@@ -4073,12 +4073,16 @@ mod tests {
 
     #[test]
     #[ignore = "requires built DynamoRIO and native client; run explicitly with --ignored"]
-    fn a_copied_policy_refusal_sends_one_final_without_containment() {
-        // Without an isolated process group the root is not killed, so the
-        // copied child deterministically reaches exit cleanup after its
-        // early refusal FINAL. Cleanup must recognize the finalized sender
-        // instead of sending a second FINAL (which used to print a false
-        // transport failure and nest an exit 101).
+    fn a_copied_policy_refusal_reports_122_under_evidence_without_isolated_group() {
+        // What this shows: a forced refusal under protected evidence,
+        // without an isolated process group, surfaces as exit 122 with
+        // the named refusal line. It does NOT deterministically show a
+        // single FINAL: with evidence on, the root is still killed and
+        // the launcher still kills the run, so whether the child's exit
+        // cleanup runs before that kill is a race (recorded negative
+        // control against the previous client caught 0 of 10). The
+        // deterministic single-FINAL catch is the source invariant in
+        // evidence.rs (`native_finalize_treats_an_already_finalized_sender_as_done`).
         let directory = tempfile::tempdir().unwrap();
         let source =
             Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/evidence_vfork_open_exec.c");

@@ -341,5 +341,15 @@ fn native_physical_decoding_precedes_materialization_and_completion() {
         refusal_guard < refusal_return
             && refusal_return < physical.find("materialize_dynamorio_evidence_log").unwrap()
     );
+    // The guard is consulted only on the decode-error path, never in
+    // front of decoding, and no exit-code idiom may reintroduce the
+    // guest-controlled trigger (the file's own `Exited(101)` style
+    // included).
+    assert!(
+        physical.find("decode_dynamorio_evidence").unwrap() < refusal_guard,
+        "the refusal guard must stay behind the decode attempt"
+    );
     assert!(!physical.contains("status.code()"));
+    assert!(!physical.contains("DYNAMORIO_POLICY_REFUSAL_EXIT_CODE"));
+    assert!(!physical.contains("Exited("));
 }
