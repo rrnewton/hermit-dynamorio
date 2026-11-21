@@ -3967,7 +3967,7 @@ mod tests {
             assert_eq!(snapshot.process_images(), 1, "{flag}");
             assert_eq!(
                 snapshot.backend_failures(),
-                usize::from(backend_failure),
+                u64::from(backend_failure),
                 "{flag}"
             );
         }
