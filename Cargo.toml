@@ -13,11 +13,11 @@ repository = "https://github.com/rrnewton/hermit-dynamorio"
 
 # One exact generic core identity. No third-party backend feature is enabled.
 [workspace.dependencies]
-hermit = { package = "hermit-run", version = "0.5.7", git = "https://github.com/facebookexperimental/hermit", rev = "39b1c03c3c2ef8a2b3a20b69b9114b060b2e9323" }
-detcore = { package = "hermit-detcore", version = "0.5.7", git = "https://github.com/facebookexperimental/hermit", rev = "39b1c03c3c2ef8a2b3a20b69b9114b060b2e9323" }
-detcore-model = { version = "0.5.7", git = "https://github.com/facebookexperimental/hermit", rev = "39b1c03c3c2ef8a2b3a20b69b9114b060b2e9323" }
-hermit-resources = { version = "0.5.7", git = "https://github.com/facebookexperimental/hermit", rev = "39b1c03c3c2ef8a2b3a20b69b9114b060b2e9323" }
-hermit-test-workdir = { version = "0.5.7", git = "https://github.com/facebookexperimental/hermit", rev = "39b1c03c3c2ef8a2b3a20b69b9114b060b2e9323" }
+hermit = { package = "hermit-run", version = "0.5.7", git = "https://github.com/facebookexperimental/hermit", rev = "58e85ff87b4b43de66d35acef0f101afab98c79e" }
+detcore = { package = "hermit-detcore", version = "0.5.7", git = "https://github.com/facebookexperimental/hermit", rev = "58e85ff87b4b43de66d35acef0f101afab98c79e" }
+detcore-model = { version = "0.5.7", git = "https://github.com/facebookexperimental/hermit", rev = "58e85ff87b4b43de66d35acef0f101afab98c79e" }
+hermit-resources = { version = "0.5.7", git = "https://github.com/facebookexperimental/hermit", rev = "58e85ff87b4b43de66d35acef0f101afab98c79e" }
+hermit-test-workdir = { version = "0.5.7", git = "https://github.com/facebookexperimental/hermit", rev = "58e85ff87b4b43de66d35acef0f101afab98c79e" }
 reverie = { package = "reverie-core", version = "0.5.7", git = "https://github.com/facebookexperimental/reverie.git", rev = "39e90451329c4a0dfca7d5b00b2c6ee183c9c064" }
 reverie-memory = { version = "0.5.7", git = "https://github.com/facebookexperimental/reverie.git", rev = "39e90451329c4a0dfca7d5b00b2c6ee183c9c064" }
 reverie-rpc-transport = { version = "0.5.7", git = "https://github.com/facebookexperimental/reverie.git", rev = "39e90451329c4a0dfca7d5b00b2c6ee183c9c064" }

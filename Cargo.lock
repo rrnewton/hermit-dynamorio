@@ -463,7 +463,7 @@ dependencies = [
 [[package]]
 name = "detcore-model"
 version = "0.5.7"
-source = "git+https://github.com/facebookexperimental/hermit?rev=39b1c03c3c2ef8a2b3a20b69b9114b060b2e9323#39b1c03c3c2ef8a2b3a20b69b9114b060b2e9323"
+source = "git+https://github.com/facebookexperimental/hermit?rev=58e85ff87b4b43de66d35acef0f101afab98c79e#58e85ff87b4b43de66d35acef0f101afab98c79e"
 dependencies = [
  "anyhow",
  "bincode",
@@ -808,7 +808,7 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 [[package]]
 name = "hermit-detcore"
 version = "0.5.7"
-source = "git+https://github.com/facebookexperimental/hermit?rev=39b1c03c3c2ef8a2b3a20b69b9114b060b2e9323#39b1c03c3c2ef8a2b3a20b69b9114b060b2e9323"
+source = "git+https://github.com/facebookexperimental/hermit?rev=58e85ff87b4b43de66d35acef0f101afab98c79e#58e85ff87b4b43de66d35acef0f101afab98c79e"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -869,7 +869,7 @@ dependencies = [
 [[package]]
 name = "hermit-record"
 version = "0.5.7"
-source = "git+https://github.com/facebookexperimental/hermit?rev=39b1c03c3c2ef8a2b3a20b69b9114b060b2e9323#39b1c03c3c2ef8a2b3a20b69b9114b060b2e9323"
+source = "git+https://github.com/facebookexperimental/hermit?rev=58e85ff87b4b43de66d35acef0f101afab98c79e#58e85ff87b4b43de66d35acef0f101afab98c79e"
 dependencies = [
  "bincode",
  "hermit-detcore",
@@ -885,7 +885,7 @@ dependencies = [
 [[package]]
 name = "hermit-record-format"
 version = "0.5.7"
-source = "git+https://github.com/facebookexperimental/hermit?rev=39b1c03c3c2ef8a2b3a20b69b9114b060b2e9323#39b1c03c3c2ef8a2b3a20b69b9114b060b2e9323"
+source = "git+https://github.com/facebookexperimental/hermit?rev=58e85ff87b4b43de66d35acef0f101afab98c79e#58e85ff87b4b43de66d35acef0f101afab98c79e"
 dependencies = [
  "bincode",
  "goblin",
@@ -899,7 +899,7 @@ dependencies = [
 [[package]]
 name = "hermit-replay"
 version = "0.5.7"
-source = "git+https://github.com/facebookexperimental/hermit?rev=39b1c03c3c2ef8a2b3a20b69b9114b060b2e9323#39b1c03c3c2ef8a2b3a20b69b9114b060b2e9323"
+source = "git+https://github.com/facebookexperimental/hermit?rev=58e85ff87b4b43de66d35acef0f101afab98c79e#58e85ff87b4b43de66d35acef0f101afab98c79e"
 dependencies = [
  "anyhow",
  "hermit-detcore",
@@ -916,12 +916,12 @@ dependencies = [
 [[package]]
 name = "hermit-resources"
 version = "0.5.7"
-source = "git+https://github.com/facebookexperimental/hermit?rev=39b1c03c3c2ef8a2b3a20b69b9114b060b2e9323#39b1c03c3c2ef8a2b3a20b69b9114b060b2e9323"
+source = "git+https://github.com/facebookexperimental/hermit?rev=58e85ff87b4b43de66d35acef0f101afab98c79e#58e85ff87b4b43de66d35acef0f101afab98c79e"
 
 [[package]]
 name = "hermit-run"
 version = "0.5.7"
-source = "git+https://github.com/facebookexperimental/hermit?rev=39b1c03c3c2ef8a2b3a20b69b9114b060b2e9323#39b1c03c3c2ef8a2b3a20b69b9114b060b2e9323"
+source = "git+https://github.com/facebookexperimental/hermit?rev=58e85ff87b4b43de66d35acef0f101afab98c79e#58e85ff87b4b43de66d35acef0f101afab98c79e"
 dependencies = [
  "addr2line",
  "anyhow",
@@ -974,7 +974,7 @@ dependencies = [
 [[package]]
 name = "hermit-run-kvm"
 version = "0.5.7"
-source = "git+https://github.com/facebookexperimental/hermit?rev=39b1c03c3c2ef8a2b3a20b69b9114b060b2e9323#39b1c03c3c2ef8a2b3a20b69b9114b060b2e9323"
+source = "git+https://github.com/facebookexperimental/hermit?rev=58e85ff87b4b43de66d35acef0f101afab98c79e#58e85ff87b4b43de66d35acef0f101afab98c79e"
 dependencies = [
  "hermit-detcore",
  "reverie-kvm",
@@ -983,7 +983,7 @@ dependencies = [
 [[package]]
 name = "hermit-run-ptrace"
 version = "0.5.7"
-source = "git+https://github.com/facebookexperimental/hermit?rev=39b1c03c3c2ef8a2b3a20b69b9114b060b2e9323#39b1c03c3c2ef8a2b3a20b69b9114b060b2e9323"
+source = "git+https://github.com/facebookexperimental/hermit?rev=58e85ff87b4b43de66d35acef0f101afab98c79e#58e85ff87b4b43de66d35acef0f101afab98c79e"
 dependencies = [
  "hermit-detcore",
  "reverie-core",
@@ -993,7 +993,7 @@ dependencies = [
 [[package]]
 name = "hermit-test-workdir"
 version = "0.5.7"
-source = "git+https://github.com/facebookexperimental/hermit?rev=39b1c03c3c2ef8a2b3a20b69b9114b060b2e9323#39b1c03c3c2ef8a2b3a20b69b9114b060b2e9323"
+source = "git+https://github.com/facebookexperimental/hermit?rev=58e85ff87b4b43de66d35acef0f101afab98c79e#58e85ff87b4b43de66d35acef0f101afab98c79e"
 dependencies = [
  "libc",
 ]
