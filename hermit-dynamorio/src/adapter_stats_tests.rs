@@ -275,10 +275,9 @@ fn dynamorio_stats_block_renders_the_typed_wire_snapshot() {
 
 #[test]
 fn typed_stats_capture_aggregates_the_whole_process_tree() {
+    use hermit::app::backend_hook::SavedNativeEvidence;
     use reverie_dynamorio::backend_stats::DynamoRioProcessRecord;
     use reverie_dynamorio::backend_stats::encode_process_record;
-
-    use hermit::app::backend_hook::SavedNativeEvidence;
 
     let capture = DynamoRioStatsSink::new().unwrap();
     let root = DynamoRioProcessRecord {

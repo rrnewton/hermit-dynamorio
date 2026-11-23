@@ -25,9 +25,8 @@ use std::time::Duration;
 use std::time::Instant;
 
 mod process_tree;
-use process_tree::process_tree_snapshot;
-
 use detcore_model::HERMIT_POLICY_REFUSAL_EXIT;
+use process_tree::process_tree_snapshot;
 
 use super::hermit_test;
 use super::support::append_hermit_args_using_outer_mount;

@@ -25,7 +25,7 @@ pub mod test_support;
 pub use adapter::DynamoRioAdapter;
 
 mod library;
-pub use library::{run, run_with_output};
-
 /// Validate the actual already-produced native client against its held current engine.
 pub use engine_artifact::check_current_engine_client;
+pub use library::run;
+pub use library::run_with_output;

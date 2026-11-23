@@ -9,11 +9,16 @@
 //! The two original DynamoRIO-owned Counter1 allocator controls.
 //! The generic allocator guest remains a single core-owned compiled fixture.
 
-use reverie_liteinst::STRADDLER_STALENESS_TICKS_ENV;
 use std::os::unix::process::CommandExt;
-use std::path::{Path, PathBuf};
-use std::process::{Command, Output, Stdio};
-use std::time::{Duration, Instant};
+use std::path::Path;
+use std::path::PathBuf;
+use std::process::Command;
+use std::process::Output;
+use std::process::Stdio;
+use std::time::Duration;
+use std::time::Instant;
+
+use reverie_liteinst::STRADDLER_STALENESS_TICKS_ENV;
 
 const TEST_STRADDLER_STALENESS_TICKS: &str = "20000";
 

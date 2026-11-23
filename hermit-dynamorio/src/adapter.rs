@@ -38,12 +38,27 @@ use detcore_model::backend_engagement::BackendEngagement;
 use detcore_model::backend_engagement::BackendEngagementReport;
 use hermit::Error;
 use hermit::ExitStatus;
-use hermit::app::backend_hook::{
-    BackendAdapter, ContainerScope, CoordinatorTracing, EvidenceRequirement, Execute, Execution,
-    Mode, NativeFacts, Observation, PairEvidence, PhysicalRun, Prepare, RunLatches,
-    SavedNativeEvidence, SavedNativeEvidenceRef, VerificationCapture, VerificationLogTransport,
-    VerificationRun,
-};
+use hermit::app::backend_hook::BackendAdapter;
+use hermit::app::backend_hook::ContainerScope;
+use hermit::app::backend_hook::CoordinatorTracing;
+use hermit::app::backend_hook::EvidenceRequirement;
+use hermit::app::backend_hook::Execute;
+use hermit::app::backend_hook::Execution;
+use hermit::app::backend_hook::Mode;
+use hermit::app::backend_hook::NativeFacts;
+use hermit::app::backend_hook::Observation;
+use hermit::app::backend_hook::PairEvidence;
+use hermit::app::backend_hook::PhysicalRun;
+use hermit::app::backend_hook::Prepare;
+use hermit::app::backend_hook::RunLatches;
+use hermit::app::backend_hook::SavedNativeEvidence;
+use hermit::app::backend_hook::SavedNativeEvidenceRef;
+use hermit::app::backend_hook::StaticOptions;
+use hermit::app::backend_hook::UntracedCode;
+use hermit::app::backend_hook::VerificationCapture;
+use hermit::app::backend_hook::VerificationLogTransport;
+use hermit::app::backend_hook::VerificationRun;
+use hermit::app::backend_hook::require_untraced_code;
 use reverie::process::Bind;
 use reverie_dynamorio::DynamoRioEvidence;
 use reverie_dynamorio::DynamoRioEvidenceLogLevel;
@@ -86,8 +101,10 @@ impl BackendAdapter for DynamoRioAdapter {
     const NATIVE_IDENTITY_DIAGNOSTIC: Option<&'static str> =
         Some("dynamorio path confirmed: DynamoRIO client reported tool=Detcore");
     const NONDEFAULT_CPU_PROFILE_REFUSAL: &'static str = "Detcore answers DynamoRIO's CPUID, but the DynamoRIO runtime's configuration carries no CPU profile, so it answers only the x86-64-v2 table";
+    const UNTRACED_CODE: UntracedCode = UntracedCode::None;
 
     type Options = ();
+    type RuntimeInputs = ();
     type Session = Session;
     type Pending = Pending;
     type Facts = DynamoRioRunFacts;
@@ -104,7 +121,16 @@ impl BackendAdapter for DynamoRioAdapter {
         Ok(())
     }
 
-    fn prepare(&self, (): (), mut request: Prepare<'_>) -> Result<Session, Error> {
+    fn admit_static_options(&self, _: &StaticOptions<'_>) -> Result<(), Error> {
+        Ok(())
+    }
+
+    fn ensure_runtime_inputs(&self) -> Result<(), Error> {
+        Ok(())
+    }
+
+    fn prepare(&self, (): (), (): (), mut request: Prepare<'_>) -> Result<Session, Error> {
+        require_untraced_code::<Self>(&request.config())?;
         let mode = request.mode();
         // As in the original saved-run owner, the common verification sink owns
         // requested logs in Saved mode; ordinary single runs still refuse them.
@@ -393,9 +419,7 @@ fn fail_on_dynamorio_backend_failure(
         // No backend failure: a flagged policy refusal still ended the
         // run, and the root's reaped status (killed, in contained runs)
         // is not the refusal's outcome.
-        let refusals = snapshot
-            .as_ref()
-            .map_or(0, |stats| stats.policy_refusals());
+        let refusals = snapshot.as_ref().map_or(0, |stats| stats.policy_refusals());
         if refusals == 0 || status == ExitStatus::Exited(DYNAMORIO_POLICY_REFUSAL_EXIT_CODE) {
             return status;
         }

@@ -8,12 +8,10 @@
 
 //! Launcher for the shared counter1 tool on the DynamoRIO backend.
 
-use reverie_examples::tools::counter1 as counter1_tool;
-
-use reverie_dynamorio_examples::backend;
-
 use clap::Parser;
 use counter1_tool::CounterLocal;
+use reverie_dynamorio_examples::backend;
+use reverie_examples::tools::counter1 as counter1_tool;
 use reverie_util::CommonToolArguments;
 
 /// Run PROGRAM under the counter1 tool on DynamoRIO.

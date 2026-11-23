@@ -8,8 +8,12 @@
 
 //! The existing DynamoRIO physical Tool host; generic results stay in core.
 
-use reverie::{ExitStatus, GlobalTool, Tool};
-use reverie_examples::host::{Run, RunError, exit_code};
+use reverie::ExitStatus;
+use reverie::GlobalTool;
+use reverie::Tool;
+use reverie_examples::host::Run;
+use reverie_examples::host::RunError;
+use reverie_examples::host::exit_code;
 use reverie_util::CommonToolArguments;
 
 pub async fn run<T>(

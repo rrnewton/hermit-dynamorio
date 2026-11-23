@@ -8,8 +8,11 @@
 
 use std::os::unix::process::CommandExt;
 use std::path::Path;
-use std::process::{Command, Output, Stdio};
-use std::time::{Duration, Instant};
+use std::process::Command;
+use std::process::Output;
+use std::process::Stdio;
+use std::time::Duration;
+use std::time::Instant;
 
 fn output_with_timeout(command: &mut Command) -> Output {
     unsafe {

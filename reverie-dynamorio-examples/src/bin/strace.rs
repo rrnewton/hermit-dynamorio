@@ -6,7 +6,9 @@
 //! Launch the shared Strace Tool through an explicitly paired native caller.
 
 use clap::Parser;
-use reverie_examples::tools::strace::{Config, Filter, Strace};
+use reverie_examples::tools::strace::Config;
+use reverie_examples::tools::strace::Filter;
+use reverie_examples::tools::strace::Strace;
 use reverie_util::CommonToolArguments;
 
 #[derive(Debug, Parser)]

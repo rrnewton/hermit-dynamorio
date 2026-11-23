@@ -6,8 +6,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+use reverie_dynamorio::backend_stats::DynamoRioProcessRecord;
+use reverie_dynamorio::backend_stats::encode_process_record;
+
 use super::*;
-use reverie_dynamorio::backend_stats::{DynamoRioProcessRecord, encode_process_record};
 
 fn record() -> DynamoRioProcessRecord {
     DynamoRioProcessRecord {

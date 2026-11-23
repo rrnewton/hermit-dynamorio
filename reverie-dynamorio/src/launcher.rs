@@ -4466,9 +4466,7 @@ mod tests {
         let killed = ExitStatus::from_raw(9); // killed by SIGKILL
         let status = combine_status_and_evidence(
             Ok(killed),
-            Err(io::Error::other(
-                crate::evidence::DynamoRioPolicyRefusal,
-            )),
+            Err(io::Error::other(crate::evidence::DynamoRioPolicyRefusal)),
         )
         .unwrap();
         assert_eq!(status.code(), Some(POLICY_REFUSAL_EXIT_CODE));

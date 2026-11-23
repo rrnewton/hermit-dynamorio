@@ -13,7 +13,8 @@
 use std::fs;
 use std::io;
 use std::os::fd::AsRawFd;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 use std::process::Command;
 
 fn lock_native_client_build(directory: &std::path::Path) -> io::Result<fs::File> {
