@@ -13,17 +13,17 @@ repository = "https://github.com/rrnewton/hermit-dynamorio"
 
 # One exact generic core identity. No third-party backend feature is enabled.
 [workspace.dependencies]
-hermit = { package = "hermit-run", version = "0.5.4", git = "https://github.com/rrnewton/hermit", rev = "890f7e672ecd351644f53ab07fc78ad88a76af61" }
-detcore = { package = "hermit-detcore", version = "0.5.4", git = "https://github.com/rrnewton/hermit", rev = "890f7e672ecd351644f53ab07fc78ad88a76af61" }
-detcore-model = { version = "0.5.4", git = "https://github.com/rrnewton/hermit", rev = "890f7e672ecd351644f53ab07fc78ad88a76af61" }
-hermit-resources = { version = "0.5.4", git = "https://github.com/rrnewton/hermit", rev = "890f7e672ecd351644f53ab07fc78ad88a76af61" }
-hermit-test-workdir = { version = "0.5.4", git = "https://github.com/rrnewton/hermit", rev = "890f7e672ecd351644f53ab07fc78ad88a76af61" }
-reverie = { package = "reverie-core", version = "0.5.4", git = "https://github.com/rrnewton/reverie.git", rev = "42b59ad872680b7e7815fc7a88ed76ca3a233832" }
-reverie-memory = { version = "0.5.4", git = "https://github.com/rrnewton/reverie.git", rev = "42b59ad872680b7e7815fc7a88ed76ca3a233832" }
-reverie-rpc-transport = { version = "0.5.4", git = "https://github.com/rrnewton/reverie.git", rev = "42b59ad872680b7e7815fc7a88ed76ca3a233832" }
-reverie-util = { version = "0.5.4", git = "https://github.com/rrnewton/reverie.git", rev = "42b59ad872680b7e7815fc7a88ed76ca3a233832" }
-reverie-examples = { version = "0.5.4", git = "https://github.com/rrnewton/reverie.git", rev = "42b59ad872680b7e7815fc7a88ed76ca3a233832", default-features = false }
-reverie-liteinst = { version = "0.5.4", git = "https://github.com/rrnewton/reverie.git", rev = "42b59ad872680b7e7815fc7a88ed76ca3a233832", default-features = false }
+hermit = { package = "hermit-run", version = "0.5.7", git = "https://github.com/facebookexperimental/hermit", rev = "d6f2c1293faa373ecfd574d221a2efaaa8dad78e" }
+detcore = { package = "hermit-detcore", version = "0.5.7", git = "https://github.com/facebookexperimental/hermit", rev = "d6f2c1293faa373ecfd574d221a2efaaa8dad78e" }
+detcore-model = { version = "0.5.7", git = "https://github.com/facebookexperimental/hermit", rev = "d6f2c1293faa373ecfd574d221a2efaaa8dad78e" }
+hermit-resources = { version = "0.5.7", git = "https://github.com/facebookexperimental/hermit", rev = "d6f2c1293faa373ecfd574d221a2efaaa8dad78e" }
+hermit-test-workdir = { version = "0.5.7", git = "https://github.com/facebookexperimental/hermit", rev = "d6f2c1293faa373ecfd574d221a2efaaa8dad78e" }
+reverie = { package = "reverie-core", version = "0.5.7", git = "https://github.com/facebookexperimental/reverie.git", rev = "3271496c72233bf5310905a40431ae83e18c1bd9" }
+reverie-memory = { version = "0.5.7", git = "https://github.com/facebookexperimental/reverie.git", rev = "3271496c72233bf5310905a40431ae83e18c1bd9" }
+reverie-rpc-transport = { version = "0.5.7", git = "https://github.com/facebookexperimental/reverie.git", rev = "3271496c72233bf5310905a40431ae83e18c1bd9" }
+reverie-util = { version = "0.5.7", git = "https://github.com/facebookexperimental/reverie.git", rev = "3271496c72233bf5310905a40431ae83e18c1bd9" }
+reverie-examples = { version = "0.5.7", git = "https://github.com/facebookexperimental/reverie.git", rev = "3271496c72233bf5310905a40431ae83e18c1bd9", default-features = false }
+reverie-liteinst = { version = "0.5.7", git = "https://github.com/facebookexperimental/reverie.git", rev = "3271496c72233bf5310905a40431ae83e18c1bd9", default-features = false }
 reverie-dynamorio = { version = "0.5.4", path = "reverie-dynamorio", default-features = false }
 detcore-dynamorio = { version = "0.5.4", path = "detcore-dynamorio" }
 
@@ -116,3 +116,39 @@ opt-level = 0
 # https://github.com/rrnewton/hermit/issues/3462
 [profile.validate.package.iced-x86]
 overflow-checks = false
+
+# One source of truth for Reverie in this workspace: every Reverie crate
+# the graph reaches, through Hermit's git source (its path dependencies
+# into its Reverie submodule) or through direct dependencies here, resolves
+# to the canonical facebookexperimental/reverie git at the pinned revision,
+# so the graph carries exactly one instance of each Reverie crate. The
+# entries below are generated from the pinned Reverie workspace member list;
+# regenerate them at each pin bump instead of editing by hand.
+[patch."https://github.com/facebookexperimental/hermit"]
+linux-ns-model = { git = "https://github.com/facebookexperimental/reverie.git", rev = "3271496c72233bf5310905a40431ae83e18c1bd9" }
+nostd-print = { git = "https://github.com/facebookexperimental/reverie.git", rev = "3271496c72233bf5310905a40431ae83e18c1bd9" }
+reverie-core = { git = "https://github.com/facebookexperimental/reverie.git", rev = "3271496c72233bf5310905a40431ae83e18c1bd9" }
+reverie-examples = { git = "https://github.com/facebookexperimental/reverie.git", rev = "3271496c72233bf5310905a40431ae83e18c1bd9" }
+reverie-inguest = { git = "https://github.com/facebookexperimental/reverie.git", rev = "3271496c72233bf5310905a40431ae83e18c1bd9" }
+reverie-kvm = { git = "https://github.com/facebookexperimental/reverie.git", rev = "3271496c72233bf5310905a40431ae83e18c1bd9" }
+reverie-kvm-core = { git = "https://github.com/facebookexperimental/reverie.git", rev = "3271496c72233bf5310905a40431ae83e18c1bd9" }
+reverie-linux-provider = { git = "https://github.com/facebookexperimental/reverie.git", rev = "3271496c72233bf5310905a40431ae83e18c1bd9" }
+reverie-linuxemu = { git = "https://github.com/facebookexperimental/reverie.git", rev = "3271496c72233bf5310905a40431ae83e18c1bd9" }
+reverie-linuxemu-ext-procfs = { git = "https://github.com/facebookexperimental/reverie.git", rev = "3271496c72233bf5310905a40431ae83e18c1bd9" }
+reverie-liteinst = { git = "https://github.com/facebookexperimental/reverie.git", rev = "3271496c72233bf5310905a40431ae83e18c1bd9" }
+reverie-liteinst-artifact = { git = "https://github.com/facebookexperimental/reverie.git", rev = "3271496c72233bf5310905a40431ae83e18c1bd9" }
+reverie-liteinst-preload = { git = "https://github.com/facebookexperimental/reverie.git", rev = "3271496c72233bf5310905a40431ae83e18c1bd9" }
+reverie-loader = { git = "https://github.com/facebookexperimental/reverie.git", rev = "3271496c72233bf5310905a40431ae83e18c1bd9" }
+reverie-memory = { git = "https://github.com/facebookexperimental/reverie.git", rev = "3271496c72233bf5310905a40431ae83e18c1bd9" }
+reverie-proc-grammar = { git = "https://github.com/facebookexperimental/reverie.git", rev = "3271496c72233bf5310905a40431ae83e18c1bd9" }
+reverie-process = { git = "https://github.com/facebookexperimental/reverie.git", rev = "3271496c72233bf5310905a40431ae83e18c1bd9" }
+reverie-ptrace = { git = "https://github.com/facebookexperimental/reverie.git", rev = "3271496c72233bf5310905a40431ae83e18c1bd9" }
+reverie-rpc = { git = "https://github.com/facebookexperimental/reverie.git", rev = "3271496c72233bf5310905a40431ae83e18c1bd9" }
+reverie-rpc-macros = { git = "https://github.com/facebookexperimental/reverie.git", rev = "3271496c72233bf5310905a40431ae83e18c1bd9" }
+reverie-rpc-transport = { git = "https://github.com/facebookexperimental/reverie.git", rev = "3271496c72233bf5310905a40431ae83e18c1bd9" }
+reverie-signal = { git = "https://github.com/facebookexperimental/reverie.git", rev = "3271496c72233bf5310905a40431ae83e18c1bd9" }
+reverie-syscalls = { git = "https://github.com/facebookexperimental/reverie.git", rev = "3271496c72233bf5310905a40431ae83e18c1bd9" }
+reverie-test-support = { git = "https://github.com/facebookexperimental/reverie.git", rev = "3271496c72233bf5310905a40431ae83e18c1bd9" }
+reverie-util = { git = "https://github.com/facebookexperimental/reverie.git", rev = "3271496c72233bf5310905a40431ae83e18c1bd9" }
+riptrace-rpc = { git = "https://github.com/facebookexperimental/reverie.git", rev = "3271496c72233bf5310905a40431ae83e18c1bd9" }
+safeptrace = { git = "https://github.com/facebookexperimental/reverie.git", rev = "3271496c72233bf5310905a40431ae83e18c1bd9" }

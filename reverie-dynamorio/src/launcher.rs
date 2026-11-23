@@ -20,6 +20,7 @@ use std::os::fd::FromRawFd;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::process::CommandExt;
+use std::os::unix::process::ExitStatusExt as _;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Child;
@@ -1542,12 +1543,20 @@ pub fn failed_run_output(error: &io::Error) -> Option<&DynamoRioFailedRunOutput>
     error.get_ref()?.downcast_ref()
 }
 
+/// Exit status for a run that ended on a policy refusal.
+const POLICY_REFUSAL_EXIT_CODE: i32 = 122;
+
 fn combine_status_and_evidence(
     status: io::Result<ExitStatus>,
     evidence: io::Result<()>,
 ) -> io::Result<ExitStatus> {
     match (status, evidence) {
         (Ok(status), Ok(())) => Ok(status),
+        // A policy refusal terminated the tree (the root was killed), so
+        // its evidence outcome, not the reaped status, is the run result.
+        (Ok(_), Err(error)) if crate::evidence::is_policy_refusal(&error) => {
+            Ok(ExitStatus::from_raw(POLICY_REFUSAL_EXIT_CODE << 8))
+        }
         // An error without an exit status keeps its own kind. Spawn errors
         // bypass this helper entirely and likewise remain unchanged.
         (Err(error), _) => Err(error),
@@ -1617,6 +1626,13 @@ impl DynamoRioStatsSink {
             runner = runner.client_argument(argument);
         }
         runner
+    }
+
+    /// Read the records written so far without consuming the sink, for a
+    /// caller that must make a run-shaping decision (such as reporting a
+    /// policy refusal) before the final consuming [`Self::capture`].
+    pub fn peek_capture(&self) -> DynamoRioStatsCapture {
+        DynamoRioStatsCapture::read(&self.path)
     }
 
     /// Read exact records after the caller has reaped the followed process tree.
@@ -2286,7 +2302,6 @@ mod tests {
     mod startup_failure;
     mod stats_capture;
     use std::io::Seek as _;
-    use std::os::unix::process::ExitStatusExt as _;
 
     use super::*;
 
@@ -3872,6 +3887,243 @@ mod tests {
         }
     }
 
+    #[test]
+    #[ignore = "requires built DynamoRIO and native client; run explicitly with --ignored"]
+    fn a_copied_policy_refusal_and_unknown_action_publish_the_right_records() {
+        use crate::backend_stats::DynamoRioProcessRecord;
+        use crate::backend_stats::WIRE_RECORD_LEN;
+        use crate::backend_stats::decode_process_record;
+
+        let directory = tempfile::tempdir().unwrap();
+        let source =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/evidence_vfork_open_exec.c");
+        let fixture = directory.path().join("copied-policy-refusal");
+        let compiler = std::env::var_os("CC").unwrap_or_else(|| "cc".into());
+        assert!(
+            Command::new(compiler)
+                .args(["-std=gnu11", "-O2", "-Wall", "-Wextra", "-Werror"])
+                .arg(source)
+                .arg("-o")
+                .arg(&fixture)
+                .status()
+                .unwrap()
+                .success()
+        );
+
+        for (flag, backend_failure, policy_refusal, expected_diagnostic) in [
+            (
+                "-test-copied-policy-refusal",
+                false,
+                true,
+                Some("policy refusal for syscall 145 in copied child"),
+            ),
+            (
+                "-test-copied-unknown-action",
+                true,
+                false,
+                Some("unknown copied syscall action 99 for syscall 145"),
+            ),
+        ] {
+            let sink = DynamoRioStatsSink::new().unwrap();
+            let [stats_flag, path] = sink.client_arguments(sink.directory());
+            let runner = DynamoRioRunner::from_env()
+                .unwrap()
+                .isolated_process_group(true)
+                .client_argument(stats_flag)
+                .client_argument(path)
+                .client_argument(flag);
+            let mut guest = Command::new(&fixture);
+            guest.arg("terminal-failure").env_remove(crate::TOOL_ENV);
+            for selector in [
+                "HERMIT_DYNAMORIO_TEST_REWRITE_EXIT",
+                "HERMIT_DYNAMORIO_TEST_INJECT_INVALID_CLONE",
+                "HERMIT_DYNAMORIO_TEST_SET_REG",
+                "HERMIT_DYNAMORIO_TEST_COMPARE_EXCHANGE",
+                "HERMIT_DYNAMORIO_TEST_PPID",
+                "HERMIT_DYNAMORIO_TEST_BACKTRACE",
+                "HERMIT_DYNAMORIO_STRACE",
+                "HERMIT_DYNAMORIO_SYSCALL_HISTOGRAM",
+                "HERMIT_DYNAMORIO_COUNTER1",
+                "HERMIT_DYNAMORIO_COUNTER2",
+                "HERMIT_DYNAMORIO_CHUNKY_PRINT",
+                "HERMIT_DYNAMORIO_CHROME_TRACE",
+                "HERMIT_DYNAMORIO_CHAOS",
+                "HERMIT_DYNAMORIO_NOOP",
+                "HERMIT_DYNAMORIO_COUNTER1_EXACT",
+                "HERMIT_DYNAMORIO_COUNTER2_EXACT",
+            ] {
+                guest.env_remove(selector);
+            }
+            let output = runner.output(&guest).unwrap();
+            assert_eq!(
+                output.status.signal(),
+                Some(libc::SIGKILL),
+                "{flag}: {output:?}"
+            );
+            assert_eq!(
+                output.stdout.len(),
+                12,
+                "{flag}: identity only, no after-call marker: {output:?}"
+            );
+            if let Some(expected) = expected_diagnostic {
+                assert!(
+                    String::from_utf8_lossy(&output.stderr).contains(expected),
+                    "{flag}: {output:?}"
+                );
+            } else {
+                assert!(
+                    !String::from_utf8_lossy(&output.stderr)
+                        .contains("unsupported syscall 145 in copied child"),
+                    "{flag}: policy refusal must not add the unsupported line: {output:?}"
+                );
+            }
+            let identities: Vec<_> = output
+                .stdout
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .map(|bytes| i32::from_ne_bytes(*bytes))
+                .collect();
+            assert!(identities[0] > 0, "{flag}");
+            assert_ne!(identities[0], identities[1], "{flag}");
+            assert_eq!(identities[1], identities[2], "{flag}");
+            let capture = sink.capture();
+            let bytes = capture
+                .records()
+                .expect("copied terminal record must publish before root termination");
+            assert_eq!(bytes.len(), WIRE_RECORD_LEN, "{flag}: exactly one record");
+            let (record, consumed) = decode_process_record(bytes).unwrap();
+            assert_eq!(consumed, bytes.len());
+            assert_eq!(
+                record,
+                DynamoRioProcessRecord {
+                    backend_failure,
+                    policy_refusal,
+                    image_generation: record.image_generation,
+                    process_identity: identities[0] as u64,
+                    parent_identity: identities[1] as u64,
+                    ..Default::default()
+                },
+                "{flag}"
+            );
+            let snapshot = capture.snapshot().unwrap();
+            assert_eq!(snapshot.process_images(), 1, "{flag}");
+            assert_eq!(
+                snapshot.backend_failures(),
+                u64::from(backend_failure),
+                "{flag}"
+            );
+            assert_eq!(
+                snapshot.policy_refusals(),
+                u64::from(policy_refusal),
+                "{flag}"
+            );
+        }
+    }
+
+    #[test]
+    #[ignore = "requires built DynamoRIO and native client; run explicitly with --ignored"]
+    fn a_copied_policy_refusal_reports_122_under_protected_evidence() {
+        let directory = tempfile::tempdir().unwrap();
+        let source =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/evidence_vfork_open_exec.c");
+        let fixture = directory.path().join("copied-policy-evidence");
+        let compiler = std::env::var_os("CC").unwrap_or_else(|| "cc".into());
+        assert!(
+            Command::new(compiler)
+                .args(["-std=gnu11", "-O2", "-Wall", "-Wextra", "-Werror"])
+                .arg(source)
+                .arg("-o")
+                .arg(&fixture)
+                .status()
+                .unwrap()
+                .success()
+        );
+
+        // The refusal FINAL must reach the collector before the root is
+        // killed, every time: repeat so a race cannot hide behind one run.
+        for attempt in 0..3 {
+            let file = tempfile::tempfile().unwrap();
+            let runner = DynamoRioRunner::from_env()
+                .unwrap()
+                .isolated_process_group(true)
+                .evidence_file(&file)
+                .unwrap()
+                .client_argument("-test-copied-policy-refusal");
+            let mut guest = Command::new(&fixture);
+            guest.arg("terminal-failure").env_remove(crate::TOOL_ENV);
+            let output = runner.output(&guest).unwrap();
+            assert_eq!(
+                output.status.code(),
+                Some(POLICY_REFUSAL_EXIT_CODE),
+                "attempt {attempt}: evidence refusal must surface as 122: {output:?}"
+            );
+            assert!(
+                String::from_utf8_lossy(&output.stderr)
+                    .contains("policy refusal for syscall 145 in copied child"),
+                "attempt {attempt}: the refusal must be named: {output:?}"
+            );
+            assert!(
+                !String::from_utf8_lossy(&output.stderr)
+                    .contains("protected evidence transport failed"),
+                "attempt {attempt}: the refusal FINAL must be sent exactly once: {output:?}"
+            );
+        }
+    }
+
+    #[test]
+    #[ignore = "requires built DynamoRIO and native client; run explicitly with --ignored"]
+    fn a_copied_policy_refusal_reports_122_under_evidence_without_isolated_group() {
+        // What this shows: a forced refusal under protected evidence,
+        // without an isolated process group, surfaces as exit 122 with
+        // the named refusal line. It does NOT deterministically show a
+        // single FINAL: with evidence on, the root is still killed and
+        // the launcher still kills the run, so whether the child's exit
+        // cleanup runs before that kill is a race (recorded negative
+        // control against the previous client caught 0 of 10). The
+        // deterministic single-FINAL catch is the source invariant in
+        // evidence.rs (`native_finalize_treats_an_already_finalized_sender_as_done`).
+        let directory = tempfile::tempdir().unwrap();
+        let source =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/evidence_vfork_open_exec.c");
+        let fixture = directory.path().join("copied-policy-uncontained");
+        let compiler = std::env::var_os("CC").unwrap_or_else(|| "cc".into());
+        assert!(
+            Command::new(compiler)
+                .args(["-std=gnu11", "-O2", "-Wall", "-Wextra", "-Werror"])
+                .arg(source)
+                .arg("-o")
+                .arg(&fixture)
+                .status()
+                .unwrap()
+                .success()
+        );
+        let file = tempfile::tempfile().unwrap();
+        let runner = DynamoRioRunner::from_env()
+            .unwrap()
+            .evidence_file(&file)
+            .unwrap()
+            .client_argument("-test-copied-policy-refusal");
+        let mut guest = Command::new(&fixture);
+        guest.arg("terminal-failure").env_remove(crate::TOOL_ENV);
+        let output = runner.output(&guest).unwrap();
+        assert_eq!(
+            output.status.code(),
+            Some(POLICY_REFUSAL_EXIT_CODE),
+            "evidence refusal without an isolated group must surface as 122: {output:?}"
+        );
+        assert!(
+            String::from_utf8_lossy(&output.stderr)
+                .contains("policy refusal for syscall 145 in copied child"),
+            "the refusal must be named: {output:?}"
+        );
+        assert!(
+            !String::from_utf8_lossy(&output.stderr)
+                .contains("protected evidence transport failed"),
+            "the refusal FINAL must be sent exactly once: {output:?}"
+        );
+    }
+
     #[tokio::test]
     async fn caller_activation_failure_retains_the_reaped_child_output() {
         let directory = tempfile::tempdir().unwrap();
@@ -4201,6 +4453,23 @@ mod tests {
         )
         .unwrap_err();
         assert_eq!(error.kind(), io::ErrorKind::NotFound);
+    }
+
+    /// An evidence policy refusal is the run's result (exit 122), not an
+    /// evidence failure: the copied child that refused killed the root,
+    /// so the reaped status is a kill, and only the refusal outcome says
+    /// why the run ended.
+    #[test]
+    fn an_evidence_policy_refusal_reports_exit_122() {
+        use std::os::unix::process::ExitStatusExt;
+
+        let killed = ExitStatus::from_raw(9); // killed by SIGKILL
+        let status = combine_status_and_evidence(
+            Ok(killed),
+            Err(io::Error::other(crate::evidence::DynamoRioPolicyRefusal)),
+        )
+        .unwrap();
+        assert_eq!(status.code(), Some(POLICY_REFUSAL_EXIT_CODE));
     }
 
     #[test]

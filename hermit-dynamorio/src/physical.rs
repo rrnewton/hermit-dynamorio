@@ -8,11 +8,13 @@
 
 //! Backend-owned launch image and runtime fingerprint checks.
 
-use anyhow::anyhow;
-use goblin::elf::Elf;
-use hermit::{DetConfig, Error};
 use std::fs;
 use std::path::PathBuf;
+
+use anyhow::anyhow;
+use goblin::elf::Elf;
+use hermit::DetConfig;
+use hermit::Error;
 
 /// The program a DYNAMORIO launch runs and the working directory it runs from, as
 /// reverie-dynamorio's launcher finds them: a name without a `/` through `path`,

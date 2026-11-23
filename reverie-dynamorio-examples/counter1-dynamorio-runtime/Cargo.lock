@@ -762,7 +762,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -967,8 +967,8 @@ checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
 name = "reverie-core"
-version = "0.5.4"
-source = "git+https://github.com/rrnewton/reverie.git?rev=42b59ad872680b7e7815fc7a88ed76ca3a233832#42b59ad872680b7e7815fc7a88ed76ca3a233832"
+version = "0.5.7"
+source = "git+https://github.com/facebookexperimental/reverie.git?rev=3271496c72233bf5310905a40431ae83e18c1bd9#3271496c72233bf5310905a40431ae83e18c1bd9"
 dependencies = [
  "addr2line",
  "anyhow",
@@ -1023,8 +1023,8 @@ dependencies = [
 
 [[package]]
 name = "reverie-examples"
-version = "0.5.4"
-source = "git+https://github.com/rrnewton/reverie.git?rev=42b59ad872680b7e7815fc7a88ed76ca3a233832#42b59ad872680b7e7815fc7a88ed76ca3a233832"
+version = "0.5.7"
+source = "git+https://github.com/facebookexperimental/reverie.git?rev=3271496c72233bf5310905a40431ae83e18c1bd9#3271496c72233bf5310905a40431ae83e18c1bd9"
 dependencies = [
  "anyhow",
  "clap",
@@ -1040,16 +1040,16 @@ dependencies = [
 
 [[package]]
 name = "reverie-memory"
-version = "0.5.4"
-source = "git+https://github.com/rrnewton/reverie.git?rev=42b59ad872680b7e7815fc7a88ed76ca3a233832#42b59ad872680b7e7815fc7a88ed76ca3a233832"
+version = "0.5.7"
+source = "git+https://github.com/facebookexperimental/reverie.git?rev=3271496c72233bf5310905a40431ae83e18c1bd9#3271496c72233bf5310905a40431ae83e18c1bd9"
 dependencies = [
  "syscalls",
 ]
 
 [[package]]
 name = "reverie-process"
-version = "0.5.4"
-source = "git+https://github.com/rrnewton/reverie.git?rev=42b59ad872680b7e7815fc7a88ed76ca3a233832#42b59ad872680b7e7815fc7a88ed76ca3a233832"
+version = "0.5.7"
+source = "git+https://github.com/facebookexperimental/reverie.git?rev=3271496c72233bf5310905a40431ae83e18c1bd9#3271496c72233bf5310905a40431ae83e18c1bd9"
 dependencies = [
  "bincode",
  "bitflags 2.13.2",
@@ -1065,8 +1065,8 @@ dependencies = [
 
 [[package]]
 name = "reverie-rpc-transport"
-version = "0.5.4"
-source = "git+https://github.com/rrnewton/reverie.git?rev=42b59ad872680b7e7815fc7a88ed76ca3a233832#42b59ad872680b7e7815fc7a88ed76ca3a233832"
+version = "0.5.7"
+source = "git+https://github.com/facebookexperimental/reverie.git?rev=3271496c72233bf5310905a40431ae83e18c1bd9#3271496c72233bf5310905a40431ae83e18c1bd9"
 dependencies = [
  "async-trait",
  "bincode",
@@ -1080,8 +1080,8 @@ dependencies = [
 
 [[package]]
 name = "reverie-syscalls"
-version = "0.5.4"
-source = "git+https://github.com/rrnewton/reverie.git?rev=42b59ad872680b7e7815fc7a88ed76ca3a233832#42b59ad872680b7e7815fc7a88ed76ca3a233832"
+version = "0.5.7"
+source = "git+https://github.com/facebookexperimental/reverie.git?rev=3271496c72233bf5310905a40431ae83e18c1bd9#3271496c72233bf5310905a40431ae83e18c1bd9"
 dependencies = [
  "bitflags 2.13.2",
  "derive_more",
@@ -1096,8 +1096,8 @@ dependencies = [
 
 [[package]]
 name = "reverie-util"
-version = "0.5.4"
-source = "git+https://github.com/rrnewton/reverie.git?rev=42b59ad872680b7e7815fc7a88ed76ca3a233832#42b59ad872680b7e7815fc7a88ed76ca3a233832"
+version = "0.5.7"
+source = "git+https://github.com/facebookexperimental/reverie.git?rev=3271496c72233bf5310905a40431ae83e18c1bd9#3271496c72233bf5310905a40431ae83e18c1bd9"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1337,9 +1337,9 @@ dependencies = [
 
 [[package]]
 name = "syscalls"
-version = "0.6.18"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43d0e35dc7d73976a53c7e6d7d177ef804a0c0ee774ec77bcc520c2216fd7cbe"
+checksum = "81c645a4de0d803ced6ef0388a2646aa1ef8467173b5d59a2c33c88de4ab76e7"
 dependencies = [
  "serde",
  "serde_repr",
@@ -1365,7 +1365,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "230a1b821ccbd75b185820a1f1ff7b14d21da1e442e22c0863ea5f08771a8874"
 dependencies = [
  "rustix",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1431,9 +1431,9 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "1.53.3"
+version = "1.54.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce3335fa71841cda333a58d7615b03901380ecf09d59b3296d21f8bbac0dde4e"
+checksum = "b52fd3255258d26fac7264ab5a76b53c13367136dc011d3d6ad4f8ed070396a3"
 dependencies = [
  "bytes",
  "libc",

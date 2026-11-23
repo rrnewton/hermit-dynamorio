@@ -57,6 +57,13 @@ pub const WIRE_FLAG_DR_STATS_PRESENT: u32 = 1 << 0;
 /// with every counter zero, because its counters were copied from its parent.
 pub const WIRE_FLAG_BACKEND_FAILURE: u32 = 1 << 1;
 
+/// Flag bit set when the process image ended on a policy refusal (the
+/// client's exit-122 terminal path), not a backend failure. Consumers map
+/// a run with any flagged record to exit status 122 unless a backend
+/// failure also occurred. Like the failure bit, older decoders ignore it,
+/// so it needs no new wire version.
+pub const WIRE_FLAG_POLICY_REFUSAL: u32 = 1 << 2;
+
 /// Exact byte length of one wire-v1 process record.
 ///
 /// header(24) + image_generation(8) + identity(16) + scalar counters(40)
@@ -133,6 +140,8 @@ pub struct DynamoRioProcessRecord {
     pub dr_stats_present: bool,
     /// Whether this image ended through the client's terminal path.
     pub backend_failure: bool,
+    /// Whether this image ended on a policy refusal (exit 122).
+    pub policy_refusal: bool,
     /// DynamoRIO application-image generation (incremented per followed exec).
     pub image_generation: u64,
     /// Virtual (deterministic) process id. Identity only; never aggregated or shown.
@@ -171,6 +180,7 @@ impl Default for DynamoRioProcessRecord {
             runtime_kind: DynamoRioRuntimeKind::PrototypeTool,
             dr_stats_present: false,
             backend_failure: false,
+            policy_refusal: false,
             image_generation: 0,
             process_identity: 0,
             parent_identity: 0,
@@ -262,6 +272,9 @@ pub fn encode_process_record(record: &DynamoRioProcessRecord) -> [u8; WIRE_RECOR
     if record.backend_failure {
         flags |= WIRE_FLAG_BACKEND_FAILURE;
     }
+    if record.policy_refusal {
+        flags |= WIRE_FLAG_POLICY_REFUSAL;
+    }
     out[cursor..cursor + 4].copy_from_slice(&flags.to_le_bytes());
     cursor += 4;
     out[cursor] = record.runtime_kind.to_wire();
@@ -332,6 +345,7 @@ pub fn decode_process_record(bytes: &[u8]) -> Result<(DynamoRioProcessRecord, us
         runtime_kind,
         dr_stats_present: flags & WIRE_FLAG_DR_STATS_PRESENT != 0,
         backend_failure: flags & WIRE_FLAG_BACKEND_FAILURE != 0,
+        policy_refusal: flags & WIRE_FLAG_POLICY_REFUSAL != 0,
         image_generation: next_u64(),
         process_identity: next_u64(),
         parent_identity: next_u64(),
@@ -501,6 +515,7 @@ impl DynamoRioStatsCapture {
 pub struct DynamoRioBackendStatsSnapshot {
     process_images: u64,
     backend_failures: u64,
+    policy_refusals: u64,
     counted_branches: u64,
     intercepted_syscalls: u64,
     rewritten_syscalls: u64,
@@ -521,6 +536,13 @@ impl DynamoRioBackendStatsSnapshot {
     /// whatever exit status the tree's root returned.
     pub const fn backend_failures(&self) -> u64 {
         self.backend_failures
+    }
+
+    /// Number of process images that ended on a policy refusal (see
+    /// [`WIRE_FLAG_POLICY_REFUSAL`]). Consumers map a run with any to
+    /// exit status 122 unless it also has a backend failure.
+    pub const fn policy_refusals(&self) -> u64 {
+        self.policy_refusals
     }
 
     /// Total counted control-flow branches (the DYNAMORIO branch clock) across the tree.
@@ -616,6 +638,7 @@ impl BackendStatsSnapshot for DynamoRioBackendStatsSnapshot {
 pub struct DynamoRioBackendStatsAggregator {
     process_images: u64,
     backend_failures: u64,
+    policy_refusals: u64,
     counted_branches: u64,
     intercepted_syscalls: u64,
     rewritten_syscalls: u64,
@@ -643,6 +666,7 @@ impl DynamoRioBackendStatsAggregator {
     pub fn record(&mut self, record: &DynamoRioProcessRecord) {
         self.process_images += 1;
         self.backend_failures += u64::from(record.backend_failure);
+        self.policy_refusals += u64::from(record.policy_refusal);
         self.counted_branches = self.counted_branches.saturating_add(record.branches);
         self.intercepted_syscalls = self.intercepted_syscalls.saturating_add(record.syscalls);
         self.rewritten_syscalls = self.rewritten_syscalls.saturating_add(record.rewritten);
@@ -692,6 +716,7 @@ impl DynamoRioBackendStatsAggregator {
         DynamoRioBackendStatsSnapshot {
             process_images: self.process_images,
             backend_failures: self.backend_failures,
+            policy_refusals: self.policy_refusals,
             counted_branches: self.counted_branches,
             intercepted_syscalls: self.intercepted_syscalls,
             rewritten_syscalls: self.rewritten_syscalls,
@@ -764,6 +789,7 @@ mod tests {
             runtime_kind: DynamoRioRuntimeKind::Counter1,
             dr_stats_present: dr_stats,
             backend_failure: seed % 2 == 1,
+            policy_refusal: seed % 3 == 1,
             image_generation: seed,
             process_identity: 1000 + seed,
             parent_identity: 1,
@@ -820,6 +846,31 @@ mod tests {
     }
 
     #[test]
+    fn a_refused_image_is_counted_as_a_policy_refusal() {
+        for policy_refusal in [false, true] {
+            let record = DynamoRioProcessRecord {
+                policy_refusal,
+                ..sample_record(4, true)
+            };
+            let encoded = encode_process_record(&record);
+            let flags = u32::from_le_bytes(encoded[12..16].try_into().unwrap());
+            assert_eq!(flags & WIRE_FLAG_POLICY_REFUSAL != 0, policy_refusal);
+            assert_eq!(decode_process_record(&encoded).unwrap().0, record);
+        }
+        let mut aggregator = DynamoRioBackendStatsAggregator::new();
+        for policy_refusal in [true, false, true] {
+            aggregator.record(&DynamoRioProcessRecord {
+                policy_refusal,
+                ..sample_record(2, true)
+            });
+        }
+        let snapshot = aggregator.snapshot();
+        assert_eq!(snapshot.process_images(), 3);
+        assert_eq!(snapshot.policy_refusals(), 2);
+        assert_eq!(snapshot.backend_failures(), 0);
+    }
+
+    #[test]
     fn the_native_client_writes_the_flag_bits_this_decoder_reads() {
         let client = include_str!("../native/client.c");
         assert!(client.contains("memcpy(record, \"RVDBTSTA\", 8);"));
@@ -829,6 +880,7 @@ mod tests {
                 WIRE_FLAG_DR_STATS_PRESENT,
             ),
             ("STATS_WIRE_FLAG_BACKEND_FAILURE", WIRE_FLAG_BACKEND_FAILURE),
+            ("STATS_WIRE_FLAG_POLICY_REFUSAL", WIRE_FLAG_POLICY_REFUSAL),
         ] {
             let definition = format!("#define {name} {bit}u\n");
             assert!(

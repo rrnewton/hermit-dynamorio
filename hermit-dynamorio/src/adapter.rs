@@ -38,12 +38,27 @@ use detcore_model::backend_engagement::BackendEngagement;
 use detcore_model::backend_engagement::BackendEngagementReport;
 use hermit::Error;
 use hermit::ExitStatus;
-use hermit::app::backend_hook::{
-    BackendAdapter, ContainerScope, CoordinatorTracing, EvidenceRequirement, Execute, Execution,
-    Mode, NativeFacts, Observation, PairEvidence, PhysicalRun, Prepare, RunLatches,
-    SavedNativeEvidence, SavedNativeEvidenceRef, VerificationCapture, VerificationLogTransport,
-    VerificationRun,
-};
+use hermit::app::backend_hook::BackendAdapter;
+use hermit::app::backend_hook::ContainerScope;
+use hermit::app::backend_hook::CoordinatorTracing;
+use hermit::app::backend_hook::EvidenceRequirement;
+use hermit::app::backend_hook::Execute;
+use hermit::app::backend_hook::Execution;
+use hermit::app::backend_hook::Mode;
+use hermit::app::backend_hook::NativeFacts;
+use hermit::app::backend_hook::Observation;
+use hermit::app::backend_hook::PairEvidence;
+use hermit::app::backend_hook::PhysicalRun;
+use hermit::app::backend_hook::Prepare;
+use hermit::app::backend_hook::RunLatches;
+use hermit::app::backend_hook::SavedNativeEvidence;
+use hermit::app::backend_hook::SavedNativeEvidenceRef;
+use hermit::app::backend_hook::StaticOptions;
+use hermit::app::backend_hook::UntracedCode;
+use hermit::app::backend_hook::VerificationCapture;
+use hermit::app::backend_hook::VerificationLogTransport;
+use hermit::app::backend_hook::VerificationRun;
+use hermit::app::backend_hook::require_untraced_code;
 use reverie::process::Bind;
 use reverie_dynamorio::DynamoRioEvidence;
 use reverie_dynamorio::DynamoRioEvidenceLogLevel;
@@ -86,8 +101,10 @@ impl BackendAdapter for DynamoRioAdapter {
     const NATIVE_IDENTITY_DIAGNOSTIC: Option<&'static str> =
         Some("dynamorio path confirmed: DynamoRIO client reported tool=Detcore");
     const NONDEFAULT_CPU_PROFILE_REFUSAL: &'static str = "Detcore answers DynamoRIO's CPUID, but the DynamoRIO runtime's configuration carries no CPU profile, so it answers only the x86-64-v2 table";
+    const UNTRACED_CODE: UntracedCode = UntracedCode::None;
 
     type Options = ();
+    type RuntimeInputs = ();
     type Session = Session;
     type Pending = Pending;
     type Facts = DynamoRioRunFacts;
@@ -104,7 +121,16 @@ impl BackendAdapter for DynamoRioAdapter {
         Ok(())
     }
 
-    fn prepare(&self, (): (), mut request: Prepare<'_>) -> Result<Session, Error> {
+    fn admit_static_options(&self, _: &StaticOptions<'_>) -> Result<(), Error> {
+        Ok(())
+    }
+
+    fn ensure_runtime_inputs(&self) -> Result<(), Error> {
+        Ok(())
+    }
+
+    fn prepare(&self, (): (), (): (), mut request: Prepare<'_>) -> Result<Session, Error> {
+        require_untraced_code::<Self>(&request.config())?;
         let mode = request.mode();
         // As in the original saved-run owner, the common verification sink owns
         // requested logs in Saved mode; ordinary single runs still refuse them.
@@ -323,6 +349,12 @@ fn write_dynamorio_engagement(
 /// or Tool failure (`exit_runtime_tree(101)` in reverie-dynamorio's client).
 const DYNAMORIO_BACKEND_FAILURE_EXIT_CODE: i32 = 101;
 
+/// The exit code for a run a guest process ended on a policy refusal
+/// (Detcore's own refusal status). A copied child's refusal kills the
+/// run's root, so the flagged stats record, not the reaped status, is
+/// how the refusal reaches this adapter.
+const DYNAMORIO_POLICY_REFUSAL_EXIT_CODE: i32 = 122;
+
 /// Prints and records a single run's statistics as requested, and returns them
 /// when they could be read. A run always captures them: they are also how a
 /// backend failure in a guest child is found (see [`fail_on_dynamorio_backend_failure`]).
@@ -352,8 +384,20 @@ fn finish_single_run_dynamorio_stats(
     }
 }
 
+/// Whether any process image of the run ended on a policy refusal, with
+/// no backend failure in the same run (a failure is the stronger outcome
+/// and keeps its existing handling). This is the only trigger for the
+/// verification path's refusal report: the exit code alone is guest
+/// controlled and proves nothing.
+fn dynamorio_run_was_refused(capture: &DynamoRioStatsCapture) -> bool {
+    capture
+        .snapshot()
+        .is_ok_and(|stats| stats.policy_refusals() > 0 && stats.backend_failures() == 0)
+}
+
 /// `status`, or a failed status when any process image of the run ended on a
-/// backend or Tool failure.
+/// backend or Tool failure (or the refusal status when one ended on a
+/// policy refusal).
 ///
 /// The native client ends such a process with exit code 101. When the guest
 /// tree has no isolated process group (`--allow-unsupported-syscalls` without
@@ -367,10 +411,27 @@ fn fail_on_dynamorio_backend_failure(
     // A complete failure-only record remains authoritative even if the root
     // was killed before it could publish execution counters. It cannot prove
     // engagement or verification completeness; require_dynamorio_stats owns those.
-    let failures = capture
-        .and_then(|capture| capture.snapshot().ok())
+    let snapshot = capture.and_then(|capture| capture.snapshot().ok());
+    let failures = snapshot
+        .as_ref()
         .map_or(0, |stats| stats.backend_failures());
-    if failures == 0 || status == ExitStatus::Exited(DYNAMORIO_BACKEND_FAILURE_EXIT_CODE) {
+    if failures == 0 {
+        // No backend failure: a flagged policy refusal still ended the
+        // run, and the root's reaped status (killed, in contained runs)
+        // is not the refusal's outcome.
+        let refusals = snapshot.as_ref().map_or(0, |stats| stats.policy_refusals());
+        if refusals == 0 || status == ExitStatus::Exited(DYNAMORIO_POLICY_REFUSAL_EXIT_CODE) {
+            return status;
+        }
+        eprintln!(
+            "hermit: [dynamorio backend] {refusals} guest process(es) ended on a policy refusal \
+             (exit {DYNAMORIO_POLICY_REFUSAL_EXIT_CODE}), but the guest tree finished with \
+             {status:?}; failing the run with exit {DYNAMORIO_POLICY_REFUSAL_EXIT_CODE}. The \
+             refusing process's diagnostic is above."
+        );
+        return ExitStatus::Exited(DYNAMORIO_POLICY_REFUSAL_EXIT_CODE);
+    }
+    if status == ExitStatus::Exited(DYNAMORIO_BACKEND_FAILURE_EXIT_CODE) {
         return status;
     }
     eprintln!(
@@ -1210,8 +1271,34 @@ impl DynamoRioVerification {
         };
         drop(deadlock_recording);
         let output = output?;
-        let evidence = decode_dynamorio_evidence(&mut evidence_file)
-            .map_err(|error| error.context(hermit::BackendRunFailure))?;
+        // A policy refusal publishes no evidence artifact (the collector
+        // truncates it, as for a backend failure), so its decode fails;
+        // report the refusal status itself in that case instead of the
+        // empty-artifact error. Trigger on the flagged refusal record,
+        // never on the exit code alone: a guest may exit 122 with no
+        // refusal, and its evidence (and any latched determinism loss)
+        // must still be decoded and honoured. The core's exit policy
+        // surfaces the refusal before stats are consumed for completeness.
+        let evidence = match decode_dynamorio_evidence(&mut evidence_file) {
+            Ok(evidence) => evidence,
+            Err(_error) if dynamorio_run_was_refused(&stats.peek_capture()) => {
+                return Ok(PhysicalRun {
+                    output: dynamorio_verification_output(output),
+                    skid_overshoots: 0,
+                    terminal_outcome: None,
+                    latches: RunLatches {
+                        determinism_loss: None,
+                        log_sink_failure: None,
+                    },
+                    pending: Pending(DynamoRioRunCompletion {
+                        stats,
+                        initialization_records: 0,
+                        terminal_stdin: self.terminal,
+                    }),
+                });
+            }
+            Err(error) => return Err(error.context(hermit::BackendRunFailure)),
+        };
         materialize_dynamorio_evidence_log(&evidence, capture.log, capture.path)
             .map_err(|error| error.context(hermit::BackendRunFailure))?;
         Ok(PhysicalRun {

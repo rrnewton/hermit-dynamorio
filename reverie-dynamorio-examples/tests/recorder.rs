@@ -6,9 +6,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-use reverie::GlobalTool;
 use std::path::Path;
 use std::process::Command;
+
+use reverie::GlobalTool;
 
 /// Every run gets the sanitizer settings reverie-ptrace adds to its guest's
 /// environment (tracer.rs), so that ptrace's guest has the native one: the

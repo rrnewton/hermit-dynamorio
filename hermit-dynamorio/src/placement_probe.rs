@@ -5,7 +5,8 @@
 
 use std::fs;
 use std::os::unix::ffi::OsStrExt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 
 pub(crate) struct Probe {
     _directory: tempfile::TempDir,

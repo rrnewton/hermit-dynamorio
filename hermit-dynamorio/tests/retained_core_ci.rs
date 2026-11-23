@@ -19,13 +19,20 @@ mod support;
 
 use std::fs;
 use std::os::unix::process::CommandExt;
-use std::path::{Path, PathBuf};
-use std::process::{Command, Output, Stdio};
+use std::path::Path;
+use std::path::PathBuf;
+use std::process::Command;
+use std::process::Output;
+use std::process::Stdio;
 use std::sync::OnceLock;
 use std::thread;
 use std::time::Duration;
+
 use support::append_hermit_args_using_outer_mount as append_hermit_args;
-use support::{assert_success, hermit, hermit_command, stderr};
+use support::assert_success;
+use support::hermit;
+use support::hermit_command;
+use support::stderr;
 const ISOLATED_WORKDIR_ENV: &str = "HERMIT_E2E_EMPTY_WORKDIR";
 static DBT_UNSUPPORTED_SYSCALL_GUEST: OnceLock<PathBuf> = OnceLock::new();
 static DBT_STDERR_GUEST: OnceLock<PathBuf> = OnceLock::new();

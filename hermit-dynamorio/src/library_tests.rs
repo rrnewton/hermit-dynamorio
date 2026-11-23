@@ -29,7 +29,12 @@ fn dynamorio_retries_only_the_pre_guest_bootstrap_failure() {
 
 #[test]
 fn dynamorio_public_dispatch_refuses_strict_schedule_boundaries() {
-    let command = super::Command::new("/bin/true");
+    // A nonexistent program keeps auto resolution host-independent:
+    // resolve_launch_auto takes its deterministic x86-64-v2 branch when the
+    // program cannot be found, so the backend refusal below is reached on
+    // every host (a real /bin/true declaring x86-64-v3 would be refused
+    // earlier, before this backend check).
+    let command = super::Command::new("/nonexistent/hermit-dynamorio-dispatch-test");
     let config = super::DetConfig {
         sequentialize_threads: true,
         strict_schedule_boundaries: true,
@@ -48,7 +53,8 @@ fn dynamorio_public_dispatch_refuses_strict_schedule_boundaries() {
 
 #[test]
 fn dynamorio_public_dispatch_requires_sequentialized_threads() {
-    let command = super::Command::new("/bin/true");
+    // Nonexistent program: see the strict-boundaries test above.
+    let command = super::Command::new("/nonexistent/hermit-dynamorio-dispatch-test");
     let config = super::DetConfig {
         sequentialize_threads: false,
         ..Default::default()

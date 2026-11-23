@@ -12,9 +12,15 @@
 use std::os::fd::AsFd;
 use std::path::PathBuf;
 
-use crate::physical::{declare_dynamorio_launcher, record_dynamorio_launched_image};
 use anyhow::anyhow;
-use hermit::{Command, DetConfig, Error, ExitStatus, Output};
+use hermit::Command;
+use hermit::DetConfig;
+use hermit::Error;
+use hermit::ExitStatus;
+use hermit::Output;
+
+use crate::physical::declare_dynamorio_launcher;
+use crate::physical::record_dynamorio_launched_image;
 
 /// Run a command with the full DynamoRIO Detcore runtime.
 ///
@@ -56,6 +62,10 @@ async fn run_inner(
     capture_output: bool,
 ) -> Result<Output, Error> {
     let mut config = config;
+    // Match the core library launch: resolve an auto CPU profile to a named
+    // one before admission, so a default DetConfig reaches the backend's own
+    // refusals instead of dying on the unresolved auto.
+    hermit::cpu_profile_admission::resolve_launch_auto(&command, &mut config)?;
     hermit::cpu_profile_admission::refuse_unadmitted_launch(&config, false)?;
     hermit::preemption_admission::refuse_unqualified_annotated_launch(&config)?;
     config.launch_image = hermit::launched_image(&command);

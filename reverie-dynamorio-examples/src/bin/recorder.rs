@@ -20,14 +20,12 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 
 use clap::Parser;
-
-use reverie_dynamorio_examples::backend;
-use reverie_examples::host::run_native;
-use reverie_examples::tools::recorder_tool;
-
 use recorder_tool::Recorder;
 use recorder_tool::report;
 use recorder_tool::reverie_events;
+use reverie_dynamorio_examples::backend;
+use reverie_examples::host::run_native;
+use reverie_examples::tools::recorder_tool;
 
 /// Where to run the program.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]

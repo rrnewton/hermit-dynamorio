@@ -49,6 +49,7 @@ const FRAME_ERROR: u8 = 6;
 const FRAME_CHILD: u8 = 7;
 const FINAL_GUEST_COMPLETED: u8 = 0;
 const FINAL_BACKEND_FAILURE: u8 = 1;
+const FINAL_POLICY_REFUSAL: u8 = 2;
 
 const FILE_MAGIC: &[u8; 8] = b"RVDBTEF1";
 const FILE_VERSION: u16 = 1;
@@ -81,6 +82,7 @@ const SESSION_FINISHED: u8 = 3;
 enum FinalOutcome {
     GuestCompleted,
     BackendFailure,
+    PolicyRefusal,
 }
 
 impl TryFrom<&[u8]> for FinalOutcome {
@@ -90,6 +92,7 @@ impl TryFrom<&[u8]> for FinalOutcome {
         match payload {
             [FINAL_GUEST_COMPLETED] => Ok(Self::GuestCompleted),
             [FINAL_BACKEND_FAILURE] => Ok(Self::BackendFailure),
+            [FINAL_POLICY_REFUSAL] => Ok(Self::PolicyRefusal),
             [_] => Err(invalid_data(
                 "DYNAMORIO evidence FINAL frame outcome is unknown",
             )),
@@ -98,6 +101,28 @@ impl TryFrom<&[u8]> for FinalOutcome {
             )),
         }
     }
+}
+
+/// Terminal evidence outcome for a run that ended on a policy refusal
+/// (exit 122), distinct from a backend failure. The launcher maps it to
+/// exit status 122 instead of reporting an evidence failure.
+#[derive(Debug)]
+pub(crate) struct DynamoRioPolicyRefusal;
+
+impl std::fmt::Display for DynamoRioPolicyRefusal {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("DYNAMORIO run ended on a policy refusal")
+    }
+}
+
+impl std::error::Error for DynamoRioPolicyRefusal {}
+
+/// Whether `error` carries the terminal policy-refusal outcome, so the
+/// launcher can map it to exit status 122 rather than an evidence failure.
+pub(crate) fn is_policy_refusal(error: &io::Error) -> bool {
+    error
+        .get_ref()
+        .is_some_and(|source| source.downcast_ref::<DynamoRioPolicyRefusal>().is_some())
 }
 
 #[derive(Debug)]
@@ -695,6 +720,7 @@ struct Collector {
     hash: u64,
     saw_start: bool,
     backend_failure: bool,
+    policy_refusal: bool,
 }
 
 impl Collector {
@@ -714,6 +740,7 @@ impl Collector {
             hash: FNV_OFFSET,
             saw_start: false,
             backend_failure: false,
+            policy_refusal: false,
         }
     }
 
@@ -846,6 +873,7 @@ impl Collector {
                 }
                 self.terminal_processes.insert(process);
                 self.backend_failure |= outcome == FinalOutcome::BackendFailure;
+                self.policy_refusal |= outcome == FinalOutcome::PolicyRefusal;
             }
             FRAME_ERROR => {
                 let detail = String::from_utf8_lossy(payload);
@@ -1134,6 +1162,12 @@ impl Collector {
         }
         if self.backend_failure {
             return Err(io::Error::other(DynamoRioBackendFailure));
+        }
+        // A refusal terminated the tree, so other images may have no
+        // FINAL; report the refusal itself rather than an integrity
+        // error about the missing frames.
+        if self.policy_refusal {
+            return Err(io::Error::other(DynamoRioPolicyRefusal));
         }
         if self.images.values().any(|image| !image.initialized) {
             return Err(invalid_data(
@@ -2580,7 +2614,7 @@ mod tests {
         for (payload, expected) in [
             (Vec::new(), "wrong length"),
             (vec![FINAL_GUEST_COMPLETED, 0], "wrong length"),
-            (vec![2], "unknown"),
+            (vec![3], "unknown"),
         ] {
             let mut collector = Collector::new();
             start_and_initialize(&mut collector, process);
@@ -2653,6 +2687,42 @@ mod tests {
                 .and_then(|source| source.downcast_ref::<DynamoRioBackendFailure>())
                 .is_some(),
             "collector returned the wrong error: {error}"
+        );
+    }
+
+    #[test]
+    fn collector_reports_a_child_policy_refusal_before_a_missing_root_final() {
+        let root = ProcessKey {
+            pid: 37,
+            start_time: 43,
+        };
+        let child = ProcessKey {
+            pid: 38,
+            start_time: 44,
+        };
+        let mut child_payload = Vec::from(child.pid.to_le_bytes());
+        child_payload.extend_from_slice(&child.start_time.to_le_bytes());
+        let mut collector = Collector::new();
+        start_and_initialize(&mut collector, root);
+        collector
+            .absorb(FRAME_CHILD, root, 2, &child_payload)
+            .unwrap();
+        start_and_initialize(&mut collector, child);
+        collector
+            .absorb(FRAME_FINAL, child, 2, &[FINAL_POLICY_REFUSAL])
+            .unwrap();
+
+        let error = collector.finish().err().unwrap();
+        assert!(
+            is_policy_refusal(&error),
+            "collector returned the wrong error: {error}"
+        );
+        assert!(
+            error
+                .get_ref()
+                .and_then(|source| source.downcast_ref::<DynamoRioBackendFailure>())
+                .is_none(),
+            "a refusal must not be reported as a backend failure: {error}"
         );
     }
 
@@ -3416,6 +3486,20 @@ mod tests {
         assert!(source.contains("reverie_dynamorio_runtime_background_init_v3("));
     }
 
+    fn check_native_finalize_skips_finalized(source: &str) {
+        let finalize = source
+            .split_once("static void finalize_runtime_process(void) {")
+            .unwrap()
+            .1
+            .split_once("require_evidence_flush(EVIDENCE_FRAME_FINAL);")
+            .unwrap()
+            .0;
+        assert!(
+            finalize.contains("sender->finalization_started || sender->finalized"),
+            "finalize_runtime_process must treat an already finalized sender as done"
+        );
+    }
+
     fn check_native_internal_exits(source: &str) {
         let failure_marker = source
             .split_once("static void mark_backend_failure(void) {")
@@ -3605,6 +3689,30 @@ mod tests {
     #[test]
     fn native_internal_exits_mark_the_final_outcome() {
         check_native_internal_exits(include_str!("../native/client.c"));
+    }
+
+    /// A copied policy refusal flushes its FINAL early, before the root
+    /// is killed. Exit cleanup must then treat the finalized sender as
+    /// done instead of flushing again (a second attempt prints a false
+    /// transport failure and nests an exit 101). The live evidence test
+    /// cannot catch that deterministically — the launcher kills the run
+    /// when the root dies — so this source invariant is the catch.
+    #[test]
+    fn native_finalize_treats_an_already_finalized_sender_as_done() {
+        check_native_finalize_skips_finalized(include_str!("../native/client.c"));
+    }
+
+    #[test]
+    fn native_finalize_guard_rejects_a_missing_finalized_check() {
+        let source = include_str!("../native/client.c").replacen(
+            "sender->finalization_started || sender->finalized",
+            "sender->finalization_started",
+            1,
+        );
+        let result = std::panic::catch_unwind(|| {
+            check_native_finalize_skips_finalized(&source);
+        });
+        assert!(result.is_err(), "the missing-check mutant must be refused");
     }
 
     #[test]

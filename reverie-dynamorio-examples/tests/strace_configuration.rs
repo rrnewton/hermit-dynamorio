@@ -20,6 +20,7 @@ mod typed_configuration_tests {
     use std::time::Duration;
     use std::time::Instant;
 
+    use clap::Parser;
     use reverie::GlobalRPC;
     use reverie::GlobalTool;
     use reverie::Guest;
@@ -35,12 +36,13 @@ mod typed_configuration_tests {
     use reverie_dynamorio::DynamoRioSyscallOutcome;
     use reverie_dynamorio::read_tool_configuration;
     use reverie_dynamorio::run_tool_syscall_with_guest;
-    use reverie_rpc_transport::codec::encode;
-
-    use clap::Parser;
     use reverie_examples::tools::strace as global_state;
     use reverie_examples::tools::strace as tool;
-    use reverie_examples::tools::strace::{Config, Filter, Opts, Strace};
+    use reverie_examples::tools::strace::Config;
+    use reverie_examples::tools::strace::Filter;
+    use reverie_examples::tools::strace::Opts;
+    use reverie_examples::tools::strace::Strace;
+    use reverie_rpc_transport::codec::encode;
 
     struct Endpoint<'a> {
         configuration: &'a ToolConfiguration<Strace>,

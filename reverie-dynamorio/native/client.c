@@ -704,6 +704,7 @@ static bool caller_unsupported_operation(int64_t, const uint64_t*, bool);
 static int32_t runtime_admit_terminal(uintptr_t, int64_t, const uint64_t*, terminal_fact_t*);
 static void runtime_rpc_transport_fatal(uintptr_t) __attribute__((noreturn));
 static _Atomic bool runtime_backend_failure;
+static _Atomic bool runtime_policy_refusal;
 static int thread_state_index;
 static reg_id_t admission_state_tls_register;
 static uint admission_state_tls_offset;
@@ -720,6 +721,8 @@ static bool test_binary_evidence;
 static bool test_leave_process_clone_result_pending;
 static bool test_backend_failure;
 static bool test_copied_backend_failure;
+static bool test_copied_policy_refusal;
+static bool test_copied_unknown_action;
 static bool test_skip_terminal_cleanup;
 static bool test_backend_failure_sender_lookup_miss;
 static bool test_compare_exchange;
@@ -825,6 +828,7 @@ static bool has_copied_runtime(void);
 static bool is_copied_vfork_process(void);
 static void finalize_runtime_process(void);
 static void mark_backend_failure(void);
+static void mark_policy_refusal(void);
 static void publish_copied_terminal_stats(process_control_t* process);
 static void complete_runtime_thread_exit(
     prototype_counters_t* counters,
@@ -919,6 +923,10 @@ static void exit_copied_syscall_failure(process_control_t* process) {
   terminate_runtime_tree(101);
 }
 
+// Defined after require_evidence_flush: the refusal FINAL must be
+// flushed (and acknowledged) before the run's root is killed.
+static void exit_copied_policy_refusal(process_control_t* process);
+
 #define EVIDENCE_CHANNEL_HEADER_LEN 80
 #define EVIDENCE_TOKEN_LEN 32
 #define EVIDENCE_ADDRESS_LEN 16
@@ -936,6 +944,7 @@ static void exit_copied_syscall_failure(process_control_t* process) {
 #define EVIDENCE_FRAME_CHILD 7
 #define EVIDENCE_FINAL_GUEST_COMPLETED 0
 #define EVIDENCE_FINAL_BACKEND_FAILURE 1
+#define EVIDENCE_FINAL_POLICY_REFUSAL 2
 #define EVIDENCE_CONFIG_PAGE_SIZE 4096
 
 static const unsigned char evidence_channel_magic[8] =
@@ -1000,6 +1009,7 @@ typedef struct {
   bool finalization_started;
   bool finalized;
   bool backend_failure;
+  bool policy_refusal;
   bool initialization_record_sent;
   uint32_t active_threads;
 } evidence_sender_state_t;
@@ -1330,6 +1340,21 @@ static void mark_backend_failure(void) {
   dr_mutex_unlock(evidence_lock);
 }
 
+static void mark_policy_refusal(void) {
+  evidence_sender_state_t* sender;
+  // Same stickiness rule as mark_backend_failure: record the refusal
+  // before the sender lookup, which can fail transiently, so cleanup
+  // can never emit a normal FINAL after a refusal.
+  atomic_store_explicit(&runtime_policy_refusal, true, memory_order_release);
+  if (!evidence_is_enabled() || evidence_lock == NULL)
+    return;
+  dr_mutex_lock(evidence_lock);
+  sender = evidence_sender_locked();
+  if (sender != NULL)
+    sender->policy_refusal = true;
+  dr_mutex_unlock(evidence_lock);
+}
+
 static bool evidence_flush_locked(
     evidence_sender_state_t* sender,
     unsigned char terminal_kind) {
@@ -1363,8 +1388,12 @@ static bool evidence_flush_locked(
     if (terminal_kind == EVIDENCE_FRAME_FINAL) {
       sender->backend_failure |=
           atomic_load_explicit(&runtime_backend_failure, memory_order_acquire);
-      final_outcome = sender->backend_failure ? EVIDENCE_FINAL_BACKEND_FAILURE
-                                              : EVIDENCE_FINAL_GUEST_COMPLETED;
+      sender->policy_refusal |=
+          atomic_load_explicit(&runtime_policy_refusal, memory_order_acquire);
+      final_outcome = sender->backend_failure
+          ? EVIDENCE_FINAL_BACKEND_FAILURE
+          : (sender->policy_refusal ? EVIDENCE_FINAL_POLICY_REFUSAL
+                                    : EVIDENCE_FINAL_GUEST_COMPLETED);
       payload = &final_outcome;
       payload_length = sizeof(final_outcome);
     }
@@ -1421,6 +1450,28 @@ static void require_evidence_flush(unsigned char terminal_kind) {
         diagnostic_file, "reverie-dynamorio: protected evidence transport failed\n");
     exit_runtime_tree(101);
   }
+}
+
+// Ends this copied child on a policy refusal. Order matters: an active
+// mapping capture is retired first (it must not enter evidence logging),
+// then the refusal is marked so the evidence FINAL and the stats record
+// both carry it, then the FINAL is flushed and acknowledged BEFORE
+// terminate_runtime_tree kills the run's root (the launcher kills the
+// whole run when the root dies, so a FINAL sent only from event_exit
+// would race that kill). The early stats record is published for the
+// same reason. This child then exits 122; in a contained run the root
+// is killed, so the launcher and adapter map the refusal outcome (or
+// the flagged record) to the run's 122 result. Nothing here marks a
+// backend failure.
+static void exit_copied_policy_refusal(process_control_t* process) {
+  if (mapping_capture_active())
+    mapping_capture_terminal();
+  mark_policy_refusal();
+  require_evidence_flush(EVIDENCE_FRAME_FINAL);
+  if (runtime_process_group != 0 &&
+      runtime_process_group != dr_get_process_id())
+    publish_copied_terminal_stats(process);
+  terminate_runtime_tree(122);
 }
 
 static void reverie_dynamorio_emit_evidence(const char* buf, size_t len) {
@@ -4167,9 +4218,15 @@ static int64_t refuse_dup_onto_internal_descriptor(int sysnum, int target) {
       "owns; moving it out of the guest's way is not implemented\n",
       sysnum == SYS_dup2 ? "dup2" : "dup3",
       target);
-  // Through exit_runtime_tree, so the protected evidence records that the run
-  // ended here rather than finding its outcome missing.
-  exit_runtime_tree(122);
+  // Mark the refusal (not a backend failure), so the protected evidence
+  // FINAL and the stats record both carry the refusal outcome and the
+  // consumers map the run to 122, rather than finding its outcome missing.
+  // The mapping-capture check comes first, as in exit_runtime_tree: an
+  // active capture must not enter evidence logging.
+  if (mapping_capture_active())
+    mapping_capture_terminal();
+  mark_policy_refusal();
+  terminate_runtime_tree(122);
   return -EBADF;
 }
 
@@ -5998,7 +6055,9 @@ static void finalize_runtime_process(void) {
       exit_runtime_tree(101);
       return;
     }
-    if (sender->finalization_started) {
+    if (sender->finalization_started || sender->finalized) {
+      // A copied policy refusal flushed its FINAL early, before the root
+      // was killed; that acknowledged frame is this sender's finalization.
       dr_mutex_unlock(evidence_lock);
       return;
     }
@@ -6629,7 +6688,20 @@ static bool pre_syscall(void* drcontext, int sysnum) {
       (copied_clone_flags & CLONE_THREAD) == 0 &&
       (copied_clone_flags & CLONE_VFORK) != 0;
 
-  if (protect_evidence_socket_syscall(
+  /* For a copied runtime's open family, let the copied gate decide first.
+   * Its named refusal must precede the evidence guard's own O_PATH lookup
+   * and unnamed EPERM. has_copied_runtime() also covers external-global
+   * fork children, which never reach the copied gate; for them the guard
+   * is deferred past the clone handoff and thread_init to the fallthrough
+   * check below, still before any native effect (runtime-injected calls
+   * run the guard inside invoke_syscall). This only reorders the checks:
+   * copied-gate errno and terminal actions now precede the guard's EPERM,
+   * and if the gate allows native execution, the deferred guard still
+   * runs before any native effect. */
+  bool defer_evidence_open_family = has_copied_runtime() &&
+      (sysnum == SYS_open || sysnum == SYS_openat || sysnum == SYS_creat);
+  if (!defer_evidence_open_family &&
+      protect_evidence_socket_syscall(
           (uintptr_t)drcontext, sysnum, args, &result)) {
     dr_syscall_set_result(drcontext, (reg_t)result);
     return false;
@@ -6693,10 +6765,16 @@ static bool pre_syscall(void* drcontext, int sysnum) {
     evidence_callback_leave();
     if (test_copied_backend_failure && sysnum == SYS_sched_getscheduler)
       copied_action = 1;
-    // Negative actions are deterministic errno values synthesized by the
-    // copied-child policy. They avoid executing a host-dependent syscall while
-    // preserving the error that the instrumented root observes.
-    if (copied_action < 0) {
+    if (test_copied_policy_refusal && sysnum == SYS_sched_getscheduler)
+      copied_action = 3;
+    if (test_copied_unknown_action && sysnum == SYS_sched_getscheduler)
+      copied_action = 99;
+    // Negative actions in the Linux errno range are deterministic errno
+    // values synthesized by the copied-child policy. They avoid executing
+    // a host-dependent syscall while preserving the error that the
+    // instrumented root observes. A value below -4095 is not an errno;
+    // it falls through to the unknown-action refusal below.
+    if (copied_action < 0 && copied_action >= -4095) {
       dr_syscall_set_result(drcontext, (reg_t)copied_action);
       return false;
     }
@@ -6708,11 +6786,37 @@ static bool pre_syscall(void* drcontext, int sysnum) {
       exit_copied_syscall_failure(process);
       return false;
     }
+    if (copied_action == 3) {
+      // HERMIT_COPIED_ACTION_POLICY_REFUSAL. Name the refused call here
+      // as well as in the gate, so every emitter of action 3 produces a
+      // named refusal; this is not the generic unsupported line and it
+      // does not mark a backend failure.
+      dr_fprintf(
+          diagnostic_file,
+          "detcore-dynamorio: policy refusal for syscall %d in copied child\n",
+          sysnum);
+      exit_copied_policy_refusal(process);
+      return false;
+    }
+    if (copied_action != 0 && copied_action != 2) {
+      dr_fprintf(
+          diagnostic_file,
+          "detcore-dynamorio: unknown copied syscall action %d for syscall %d\n",
+          copied_action,
+          sysnum);
+      exit_copied_syscall_failure(process);
+      return false;
+    }
+    if (defer_evidence_open_family &&
+        protect_evidence_socket_syscall(
+            (uintptr_t)drcontext, sysnum, args, &result)) {
+      dr_syscall_set_result(drcontext, (reg_t)result);
+      return false;
+    }
     if (copied_action == 2) {
       report_copied_unsupported_syscall(sysnum);
       return true;
     }
-    DR_ASSERT(copied_action == 0);
 #ifdef SYS_execveat
     // TODO-HUMAN-REVIEW(PR-587): Fail closed before copied children bypass the
     // Detcore runtime callback.
@@ -6740,6 +6844,12 @@ static bool pre_syscall(void* drcontext, int sysnum) {
       require_evidence_flush(EVIDENCE_FRAME_EXEC);
     }
     return execute;
+  }
+  if (defer_evidence_open_family &&
+      protect_evidence_socket_syscall(
+          (uintptr_t)drcontext, sysnum, args, &result)) {
+    dr_syscall_set_result(drcontext, (reg_t)result);
+    return false;
   }
   if (caller_mode()) {
     if (!runtime_ready_for_image()) {
@@ -7590,6 +7700,10 @@ static void thread_exit(void* drcontext) {
 // launcher's caller learns a child failed (backend_stats.rs,
 // WIRE_FLAG_BACKEND_FAILURE).
 #define STATS_WIRE_FLAG_BACKEND_FAILURE 2u
+// Set when this image ended on a policy refusal (exit 122), not a
+// backend failure. The launcher and adapter map a flagged record to
+// the run's 122 result (backend_stats.rs, WIRE_FLAG_POLICY_REFUSAL).
+#define STATS_WIRE_FLAG_POLICY_REFUSAL 4u
 
 static void stats_put_u64_le(unsigned char* out, uint64_t value) {
   for (int byte = 0; byte < 8; ++byte)
@@ -7631,6 +7745,8 @@ static void emit_stats_record(bool include_counters) {
   uint32_t flags = dr_stats_present ? STATS_WIRE_FLAG_DR_STATS_PRESENT : 0u;
   if (atomic_load_explicit(&runtime_backend_failure, memory_order_acquire))
     flags |= STATS_WIRE_FLAG_BACKEND_FAILURE;
+  if (atomic_load_explicit(&runtime_policy_refusal, memory_order_acquire))
+    flags |= STATS_WIRE_FLAG_POLICY_REFUSAL;
   record[12] = (unsigned char)(flags & 0xff);
   record[13] = (unsigned char)((flags >> 8) & 0xff);
   record[14] = (unsigned char)((flags >> 16) & 0xff);
@@ -7779,7 +7895,9 @@ static void event_exit(void) {
     if (!has_copied_runtime())
       emit_stats_record(true);
     else if (atomic_load_explicit(
-                 &runtime_backend_failure, memory_order_acquire)) {
+                 &runtime_backend_failure, memory_order_acquire) ||
+             atomic_load_explicit(
+                 &runtime_policy_refusal, memory_order_acquire)) {
       process_control_t* process =
           existing_process_control((int32_t)dr_get_process_id());
       if (process == NULL || atomic_load_explicit(
@@ -8110,6 +8228,10 @@ DR_EXPORT void dr_client_main(client_id_t id, int argc, const char* argv[]) {
       test_backend_failure = true;
     else if (strcmp(argv[i], "-test-copied-backend-failure") == 0)
       test_copied_backend_failure = true;
+    else if (strcmp(argv[i], "-test-copied-policy-refusal") == 0)
+      test_copied_policy_refusal = true;
+    else if (strcmp(argv[i], "-test-copied-unknown-action") == 0)
+      test_copied_unknown_action = true;
     else if (strcmp(argv[i], "-test-skip-terminal-cleanup") == 0)
       test_skip_terminal_cleanup = true;
     else if (strcmp(argv[i], "-test-backend-failure-sender-lookup-miss") == 0)

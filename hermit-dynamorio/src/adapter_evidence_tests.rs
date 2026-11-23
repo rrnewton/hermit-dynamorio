@@ -324,8 +324,32 @@ fn native_physical_decoding_precedes_materialization_and_completion() {
         physical.find("decode_dynamorio_evidence").unwrap()
             < physical.find("materialize_dynamorio_evidence_log").unwrap()
     );
+    // The normal path materializes before it completes. The only earlier
+    // completion is the policy-refusal report on a failed decode, which
+    // must be guarded by the flagged-record predicate, never by an exit
+    // code a guest controls: exactly two completions exist, the refusal
+    // one sits between the decode and the materialization behind its
+    // guard, and no exit-code check appears anywhere in this path.
+    assert_eq!(physical.matches("Ok(PhysicalRun").count(), 2);
     assert!(
         physical.find("materialize_dynamorio_evidence_log").unwrap()
-            < physical.find("Ok(PhysicalRun").unwrap()
+            < physical.rfind("Ok(PhysicalRun").unwrap()
     );
+    let refusal_return = physical.find("Ok(PhysicalRun").unwrap();
+    let refusal_guard = physical.find("dynamorio_run_was_refused").unwrap();
+    assert!(
+        refusal_guard < refusal_return
+            && refusal_return < physical.find("materialize_dynamorio_evidence_log").unwrap()
+    );
+    // The guard is consulted only on the decode-error path, never in
+    // front of decoding, and no exit-code idiom may reintroduce the
+    // guest-controlled trigger (the file's own `Exited(101)` style
+    // included).
+    assert!(
+        physical.find("decode_dynamorio_evidence").unwrap() < refusal_guard,
+        "the refusal guard must stay behind the decode attempt"
+    );
+    assert!(!physical.contains("status.code()"));
+    assert!(!physical.contains("DYNAMORIO_POLICY_REFUSAL_EXIT_CODE"));
+    assert!(!physical.contains("Exited("));
 }

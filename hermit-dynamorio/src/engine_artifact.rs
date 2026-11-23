@@ -8,15 +8,23 @@
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use std::fs::{self, File, Metadata, OpenOptions};
+use std::fs::File;
+use std::fs::Metadata;
+use std::fs::OpenOptions;
+use std::fs::{self};
 use std::io::Read;
 use std::os::unix::ffi::OsStrExt;
-use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
-use std::path::{Path, PathBuf};
+use std::os::unix::fs::MetadataExt;
+use std::os::unix::fs::OpenOptionsExt;
+use std::path::Path;
+use std::path::PathBuf;
 
-use anyhow::{Context, Result, ensure};
+use anyhow::Context;
+use anyhow::Result;
+use anyhow::ensure;
 use serde::Deserialize;
-use sha2::{Digest, Sha256};
+use sha2::Digest;
+use sha2::Sha256;
 
 pub const ENGINE_ARTIFACT_ENV: &str = "HERMIT_DYNAMORIO_ENGINE_ARTIFACT";
 const ENGINE: &str = "libhermit_inguest_engine.so";
@@ -626,8 +634,9 @@ pub fn check_current_engine_client() -> Result<Vec<String>> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::os::unix::fs::symlink;
+
+    use super::*;
 
     #[test]
     fn held_header_refuses_changed_bytes_replaced_inode_and_symlink() {
